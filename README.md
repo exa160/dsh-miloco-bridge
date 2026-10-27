@@ -36,6 +36,12 @@
 dsh plugin --profile web add dsh-miloco-bridge
 ```
 
+### 源码安装（npm 审核期 / 未发布时）
+
+```bash
+dsh plugin --profile web add github:exa160/dsh-miloco-bridge
+```
+
 ### 从 bundle / 本地安装
 
 ```bash
