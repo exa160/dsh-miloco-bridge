@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tests
+        run: npm test
+      - name: Offline self-check
+        run: node tools/selftest.mjs
+      - name: Adapter syntax
+        run: python3 -c 'import pathlib; compile(pathlib.Path("adapter/dsh_adapter.py").read_text(encoding="utf-8"), "adapter/dsh_adapter.py", "exec")'
+      - name: Bundle
+        run: bash scripts/build-bundle.sh

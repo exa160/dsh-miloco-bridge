@@ -1,0 +1,37 @@
+dsh-miloco-bridge
+=================
+
+This repository is an independent, unofficial integration between
+DeepSeek Harness (DSH) and Xiaomi Miloco.
+
+What this repository contains
+-----------------------------
+- Original Node.js/JavaScript code for a native DSH plugin.
+- Original Chinese Skill documents written for this plugin. They describe how
+  to use this plugin's own tools; they are not copies of Xiaomi Miloco's
+  Skill documents.
+- An original, duck-typed `agent_platform` adapter that talks to DSH's HTTP
+  webhook. It does not import or vendor Xiaomi Miloco backend code.
+
+What this repository does NOT contain
+-------------------------------------
+- No Xiaomi Miloco source code, binaries, model files, dashboard assets, or
+  documentation is redistributed here.
+- No Xiaomi logo or other trademark is used to endorse this project.
+
+Third-party project
+-------------------
+Xiaomi Miloco is a separate project owned by Xiaomi Corporation and governed
+by its own license:
+  https://github.com/XiaoMi/xiaomi-miloco
+
+The optional "one-click deploy" feature clones and installs Xiaomi Miloco at
+runtime from its official repository, on the user's own machine, after the
+user explicitly clicks the button. The user is responsible for reviewing and
+complying with Xiaomi Miloco's license and with the terms applicable to any
+Xiaomi account, device, or API used with it.
+
+"Xiaomi", "Mi Home", "Mijia", and "Miloco" are trademarks or product names of
+Xiaomi Corporation and/or its affiliates. They are used here only to describe
+interoperability. This project is not affiliated with, endorsed by, or
+sponsored by Xiaomi.

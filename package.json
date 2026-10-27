@@ -1,0 +1,66 @@
+{
+  "name": "dsh-miloco-bridge",
+  "version": "0.1.0",
+  "description": "Unofficial DSH bridge for Xiaomi Miloco: an isolated Agent preset for Miloco tools, native tools/skills, Web settings, perception-priority filtering, and Miloco -> DSH push.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "miloco",
+    "miot",
+    "smart-home",
+    "perception",
+    "agent-preset"
+  ],
+  "license": "MIT",
+  "author": "dsh-miloco-bridge contributors",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./tools": "./lib/tools-entry.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "adapter",
+    "doc",
+    "scripts",
+    "install.sh",
+    "cordis.patch.yml",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "selftest": "node tools/selftest.mjs",
+    "verify:readonly": "node tools/verify-readonly.mjs",
+    "pack:bundle": "bash scripts/build-bundle.sh"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/exa160/dsh-miloco-bridge.git"
+  },
+  "homepage": "https://github.com/exa160/dsh-miloco-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/exa160/dsh-miloco-bridge/issues"
+  }
+}

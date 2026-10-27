@@ -1,0 +1,87 @@
+# dsh-miloco-bridge — bundle patch layer.
+#
+# 两半架构：
+#
+#   1. dsh-miloco-bridge —— 全局 infra 半边。负责：
+#        - POST /miloco/webhook         Miloco 主动推送的落点
+#        - /dsh-miloco-bridge/api/*     Web 设置页数据与写入
+#        - 一键部署 / 连接已有 Miloco
+#      这些能力必须全局常驻，与当前使用哪个 Agent 无关。
+#
+#   2. dsh-miloco-bridge/tools —— 只挂在专用 Agent 预设「miloco」里。
+#      设备/感知/规则/任务/身份/档案/通知等工具与全部技能都只属于这个预设，
+#      普通会话看不到任何 miloco_* 工具，也不会被注入 miloco 技能。
+#
+# 推送目标的运行时选择（会话 / 模型）写在 ~/.dsh/miloco-plugin.json；
+# 连接信息（baseUrl / token）也写在这里，因此「连接已有 Miloco」立即生效，
+# 不必重启 DSH。
+- insert:
+    - id: dsh-miloco-bridge
+      name: 'dsh-miloco-bridge'
+      config:
+        # 默认只读：写工具根本不注册，模型看不到也不会误触真实设备。
+        readOnly: true
+        # 留空 = 自动读取 $MILOCO_HOME/config.json 的 server.url / server.token。
+        baseUrl: ""
+        token: ""
+        home: "~/.miloco"
+        timeoutMs: 30000
+        # 留空 = $DSH_HOME/miloco-plugin.json / $DSH_HOME/miloco-plugin.state.json
+        overlayFile: ""
+        stateFile: ""
+        # 可选：写 profile patch 的绝对路径；留空则只写运行时 overlay。
+        profilePatch: ""
+        push:
+          enabled: true
+          path: "/miloco/webhook"
+          # 留空 = 回退到运行时 overlay 里的 push.token；两者都空则拒绝所有入站请求。
+          token: ""
+          waitForResult: true
+          target:
+            # 空 = 投到「上一次触发 miloco 的会话」。
+            sessionId: ""
+            # 新建推送会话时使用的 Agent 预设。
+            agentPreset: "miloco"
+          model:
+            # 空 = 跟随目标对话自己选的模型；provider+model 都填才覆盖。
+            provider: ""
+            model: ""
+            reasoningEffort: ""
+          perception:
+            # all / low / medium / high：低于该等级的感知建议不投递到 DSH。
+            # 规则、任务、onboarding、普通对话事件不带 urgency，始终放行。
+            minLevel: "all"
+        deploy:
+          repo: "https://github.com/XiaoMi/xiaomi-miloco"
+          # 留空 = $DSH_HOME/plugin-data/dsh-miloco-bridge/xiaomi-miloco
+          # 必须是 DSH 进程用户可读写的目录，不要指向只读工作区或插件 node_modules。
+          sourceDir: ""
+          installArgs: ["--dev", "--skip-openclaw"]
+        # 设置页里不展示任何「DSH 默认模型」配置项。模型下拉只有
+        # 「跟随该对话」+ 实际模型；不选模型就完全不动会话的模型选择。
+    # ------------------------------------------------------------------
+    # 专用 Agent 预设：只有选了它的会话才拿到米家工具与技能。
+    # ------------------------------------------------------------------
+    - id: preset-miloco
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: miloco
+        name: Miloco 家庭助手
+        description: >-
+          家里的全屋智能管家：只读 / 管家两种模式，能看设备、问摄像头、查档案与用量。
+          米家工具与技能只在这个预设里；新建会话时选择它。
+          模式说明与使用示例见「设置 → 插件 → Miloco」。
+        order: 30
+        plugins:
+          - id: dsh-miloco-bridge-tools
+            name: 'dsh-miloco-bridge/tools'
+            config:
+              readOnly: true
+              baseUrl: ""
+              token: ""
+              home: "~/.miloco"
+              timeoutMs: 30000
+              # 留空 = $DSH_HOME 下的运行时文件，与全局半边共用
+              overlayFile: ""
+              stateFile: ""
+              cwd: ""
