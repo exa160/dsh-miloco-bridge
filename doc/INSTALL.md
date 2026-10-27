@@ -26,6 +26,9 @@ cd /path/to/dsh-miloco-bridge
 dsh plugin --profile web add "link:/path/to/dsh-miloco-bridge"
 ```
 
+npm 新包可能处于审核期；若 `dsh plugin add dsh-miloco-bridge` 暂时 404，
+可改用 `dsh plugin --profile web add github:exa160/dsh-miloco-bridge`。
+
 ### 1.2 打包后安装（发布）
 
 ```bash

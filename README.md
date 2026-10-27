@@ -36,6 +36,8 @@
 dsh plugin --profile web add dsh-miloco-bridge
 ```
 
+> npm 新包可能处于审核期；若上述命令暂时 404，请使用下面的源码安装。
+
 ### 源码安装（npm 审核期 / 未发布时）
 
 ```bash
