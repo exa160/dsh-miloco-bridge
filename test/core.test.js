@@ -221,6 +221,8 @@ describe('client bundle', () => {
     assert.ok(source.includes('跟随模型默认'))
     assert.ok(source.includes('effortOptions'))
     assert.ok(source.includes('感知等级'))
+    assert.ok(source.includes('input[type="radio"]'))
+    assert.ok(source.includes('flex: 0 0 auto'))
     assert.ok(source.includes('仅高优先级'))
     assert.ok(!source.includes('插件完全不改会话模型'))
   })
