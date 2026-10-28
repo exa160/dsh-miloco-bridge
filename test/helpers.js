@@ -23,6 +23,10 @@ export async function createFakeMiloco(overrides = {}) {
     '/api/perception/engine/status': { code: 0, data: { running: true, active_sources: ['cam1'], today_inference_count: 7 } },
     '/api/admin/token-usage': { code: 0, data: { events: [{ input_tokens: 100, output_tokens: 20 }, { input_tokens: 20, output_tokens: 10 }], total: 2 } },
     '/api/home-profile/rendered': { code: 0, data: { markdown: '# 家庭档案' } },
+    '/api/admin/version': { code: 0, data: { version: '2026.10.16', git: { commit_short: 'a48c181', branch: 'main', dirty: false } } },
+    '/api/admin/upgrade/check': { code: 0, data: { current: '2026.10.16', latest: '2026.10.16', has_update: false, deploy_kind: 'release', reachable: true, release_url: 'https://example.test/release' } },
+    '/api/admin/upgrade/status': { code: 0, data: { phase: 'idle' } },
+    '/api/admin/upgrade/run': { code: 0, data: { started: true } },
     '/api/home-profile/entries': { code: 0, data: { entries: [] } },
   }
   const routes = { ...defaults, ...overrides }

@@ -3,7 +3,7 @@
 所有米家工具返回 JSON 字符串。工具只在「Miloco 家庭助手」预设的会话中可见。
 
 - 只读模式：30 个只读工具
-- 管家模式：30 只读 + 23 写
+- 管家模式：30 只读 + 26 写
 - 另有 `dsh_deliver_message`（DSH 侧投递，不碰设备）
 
 ## 只读工具（30）
@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `miloco_status` | — | `/api/admin/status` + `/api/perception/engine/status` | 运行状态、账号、引擎、数据库 |
 | `miloco_capabilities` | — | — | 当前模式与已注册工具 |
-| `miloco_device_list` | `room?` | `/api/miot/device_list` | 设备清单（did / 名称 / 房间 / 类型） |
+| `miloco_device_list` | `room?` | `/api/miot/device_list` | 设备清单；`room` 在本地按 `room_name` 过滤 |
 | `miloco_device_spec` | `did` | `/api/miot/devices/{did}/spec` | SPEC：iid、access、枚举、范围 |
 | `miloco_device_status` | `did`, `iid?` | `/api/miot/devices/{did}/status` | 当前属性值 |
 | `miloco_device_history` | — | `/api/miot/device_history` | 最近访问的 iid |
@@ -41,21 +41,24 @@
 | `miloco_push_target` | — | overlay | 当前推送目标与感知等级 |
 | `miloco_push_models` | — | DSH 模型目录 | 可选模型清单 |
 
-## 写工具（23，仅管家模式）
+## 写工具（26，仅管家模式）
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
 | `miloco_device_control` | `did`, `type?`, `iid?`, `value?`, `properties?[]`, `params?[]` | `set_property`（默认）/ `set_properties` / `call_action` |
 | `miloco_scene_trigger` | `scene_id` | 触发手动场景 |
 | `miloco_notify_push` | `notify` | 米家 App 通知 |
-| `miloco_rule_create` | `content?`, `name?`, `mode?` | 创建规则 |
-| `miloco_task_create` | `kind`, `content`, `name?` | `rule` / `schedule` / `record` / `lifecycle` |
+| `miloco_rule_create` | `name`, `task_id`, `condition`, `mode?`, `direction?`, `actions?[]`, `action_descriptions?[]`, `on_enter_*?`, `on_exit_*?` | 创建结构化规则；不再接收自然语言 `content` |
+| `miloco_rule_delete` | `rule_id` | 删除规则 |
+| `miloco_task_create` | `task_id`, `description`, `lifecycle?`, `expires_at?` | 创建任务占位行；`task_id` 只能用小写字母/数字/下划线 |
+| `miloco_task_record_init` | `task_id`, `kind`, `content?` | 初始化累计记录：`progress` / `duration` / `event` |
 | `miloco_task_delete` | `task_id`, `reason` | 删除任务（`completed` / `expired` / `abandoned`） |
-| `miloco_cron_create` | `kind`, `message`, `name?`, `cron_expr?`, `at_iso?`, `every_ms?`, `tz?`, `task_id?` | 注册定时计划 |
+| `miloco_cron_create` | `kind`, `message`, `name?`, `cron_expr?`, `at_iso?`, `every_ms?`, `tz?`, `task_id?` | 注册定时计划；`every_ms` 最小 60000 |
+| `miloco_cron_delete` | `cron_id` | 删除定时计划 |
 | `miloco_scope_set` | `items[]{did, in_use}` | 修改感知摄像头 |
-| `miloco_home_profile_write` | `ops[]` | 写正式档案；`from=<candidate_id>` 消费候选 |
-| `miloco_home_profile_candidate_write` | `ops[]` | 写候选档案 |
-| `miloco_home_profile_commit` | — | 清理/归档/渲染 |
+| `miloco_home_profile_write` | `ops[]`, `user_edit?` | 写正式档案；`from=<candidate_id>` 消费候选 |
+| `miloco_home_profile_candidate_write` | `ops[]` | 写候选档案；每个 op 必须带 `date` |
+| `miloco_home_profile_commit` | — | 清理/归档/渲染（无请求体） |
 | `miloco_home_profile_reassign` | `mappings[]` | 主体归并/名称归一 |
 | `miloco_person_create` | `name`, `role?` | 新增成员花名册 |
 | `miloco_person_update` | `person_id`, `name?`, `role?` | 修改成员 |
@@ -64,7 +67,7 @@
 | `miloco_pet_update` | `pet_id`, `name?`, `species?` | 修改宠物 |
 | `miloco_pet_delete` | `pet_id` | 删除宠物 |
 | `miloco_pet_observe` | `files[]`, `grounding?` | 观察宠物外观（不落库） |
-| `miloco_pet_reference_crops` | `pet_id`, `files[]` | 落库参照图 |
+| `miloco_pet_reference_crops` | `pet_id`, `files[]`, `mode?` | 落库参照图；multipart 字段为 `crops` |
 | `miloco_register_preview` | `media_b64?`, `media_b64_list?`, `media_kind?`, `cluster_id?`, `member_id?`, `topk?` | 身份样本预览 |
 | `miloco_register_commit` | `register_session_id_pending`, `indices?`, `member_name?`, `member_role?` | 身份样本落库 |
 | `miloco_push_target_set` | `sessionId?`, `provider?`, `model?`, `reasoningEffort?`, `perceptionLevel?` | 修改推送目标与感知等级 |

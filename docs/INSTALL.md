@@ -33,14 +33,14 @@ npm 新包可能处于审核期；若 `dsh plugin add dsh-miloco-bridge` 暂时 
 
 ```bash
 npm run pack:bundle
-# dist/dsh-miloco-bridge-0.1.0.tgz
-dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.0.tgz"
+# dist/dsh-miloco-bridge-0.1.1.tgz
+dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.1.tgz"
 ```
 
 或：
 
 ```bash
-./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.0.tgz
+./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.1.tgz
 ```
 
 ### 1.3 手动配置
@@ -200,7 +200,7 @@ overlay 示例：
 | 模式 | 工具 |
 |---|---|
 | `readonly` | 30 个只读工具 + 18 技能 |
-| `full` | 30 只读 + 23 写 + `dsh_deliver_message` + 18 技能 |
+| `full` | 30 只读 + 26 写 + `dsh_deliver_message` + 18 技能 |
 
 模式写在状态文件里，**插件激活时读取**：
 
@@ -272,7 +272,7 @@ systemctl --user restart dsh-web.service
 
 ```bash
 npm run pack:bundle
-dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.0.tgz"
+dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.1.tgz"
 systemctl --user restart dsh-web.service
 ```
 

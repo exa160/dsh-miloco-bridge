@@ -14,7 +14,7 @@ DSH Host
 │    └─ 浏览器设置页
 └── preset「miloco」
      └── dsh-miloco-bridge/tools
-          ├─ 30 只读 + 23 写 + dsh_deliver_message
+          ├─ 30 只读 + 26 写 + dsh_deliver_message
           └─ 18 Skill
 ```
 
@@ -31,7 +31,7 @@ DSH Host
 lib/
 ├── index.js            全局半边：webhook + 设置 API 的装配
 ├── tools-entry.js      预设半边：工具/技能/投递工具的装配
-├── tools.js            53 个原生工具定义
+├── tools.js            56 个原生工具定义
 ├── skills.js           SKILL.md 读取与 ctx.skills.register
 ├── miloco-client.js    Miloco HTTP 客户端（连接优先级、envelope 解包）
 ├── push.js             入站推送：鉴权、目标解析、会话恢复、等待 turn

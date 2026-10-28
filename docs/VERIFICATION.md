@@ -22,7 +22,7 @@ python3 -m py_compile adapter/dsh_adapter.py
 覆盖：
 
 - 连接/overlay/state 的路径与权限（`0600`）；
-- 只读 30 工具、管家 53 工具；
+- 只读 30 工具、管家 56 工具；
 - 推送目标：上次会话 / 显式会话 / 派生会话 / 模型留空不调 `selectModel`；
 - 感知过滤：结构化 urgency、文本“事件优先级”、批量取最高、ignore、阈值比较；
 - webhook：无令牌 503、错令牌 401、正确令牌通过、幂等、turn 等待；
@@ -144,6 +144,21 @@ node tools/verify-readonly.mjs
 真实环境结果（2026-10-28）：24/24 接口通过；账号已绑定、感知引擎运行中。
 账号昵称、设备数量与 token 用量属于家庭隐私，已脱敏，不在仓库中列出。
 
+### 3.1 写接口契约审计
+
+从运行中的 Miloco 读取 `/openapi.json`，用 stub client 执行全部 56 个工具
+（其中 52 个会发 HTTP 请求），逐项比对 method / path / query / body 与 OpenAPI
+schema（required、additionalProperties、enum）。所有 HTTP 工具的路径与方法都存在；本轮修复了：
+
+- `POST /api/tasks` 的 v2 契约（`task_id` + `description`，不再接受 `kind/content/name`）
+- 新增 `POST /api/tasks/{id}/record` 的 `miloco_task_record_init`
+- `POST /api/rules` 改为结构化 `condition/actions`
+- 设备列表的 `room` 改为本地过滤（后端没有该查询参数）
+- `candidates:write` 强制 `date`，`commit` 去掉多余请求体
+- 宠物参照图 multipart 字段改为 `crops`
+
+对应的离线契约测试见 `test/tools-contract.test.js`。真实写操作仍未在家庭设备上执行。
+
 ---
 
 ## 4. 推送闭环验证
@@ -192,7 +207,7 @@ dsh-miloco-bridge: push delivery failed ...   # 仅在失败时
 2. 查看该会话的请求头/工具列表：不应出现任何 `miloco_*`；
 3. 新建一个 **Miloco 家庭助手** 会话：
    - 只读模式：30 个 `miloco_*`；
-   - 管家模式：53 个 `miloco_*` + `dsh_deliver_message`。
+   - 管家模式：56 个 `miloco_*` + `dsh_deliver_message`。
 
 如果标准会话出现 `miloco_*`，检查 `preset-miloco` 是否被正确装载。
 
@@ -205,17 +220,17 @@ dsh-miloco-bridge: push delivery failed ...   # 仅在失败时
 
 ```bash
 npm run pack:bundle
-tar -tzf dist/dsh-miloco-bridge-0.1.0.tgz | head -30
+tar -tzf dist/dsh-miloco-bridge-0.1.1.tgz | head -30
 ```
 
 预期包含：`package/lib/*`、`package/skills/*/SKILL.md`、`package/adapter/dsh_adapter.py`、
-`package/cordis.patch.yml`、`package/doc/*`，且**不含** `test/`、`node_modules/`、真实 token。
+`package/cordis.patch.yml`、`package/docs/*`，且**不含** `test/`、`node_modules/`、真实 token。
 
 安装：
 
 ```bash
 DSH_HOME=/tmp/dsh-miloco-bundle-verify \
-  dsh plugin --profile web add "file:$PWD/dist/dsh-miloco-bridge-0.1.0.tgz"
+  dsh plugin --profile web add "file:$PWD/dist/dsh-miloco-bridge-0.1.1.tgz"
 ```
 
 ---
@@ -226,4 +241,5 @@ DSH_HOME=/tmp/dsh-miloco-bundle-verify \
   推送 turn 的等待/回复逻辑由离线测试覆盖。
 - 一键部署会运行上游安装器，耗时取决于网络与 Python 依赖；本次未在干净机器上从零跑完整安装。
 - 写操作（控制设备、建任务）没有在真实家庭上执行，避免产生物理副作用；
-  写工具的注册与参数形状由测试覆盖。
+  写工具的请求体/查询参数已按 OpenAPI 做契约测试（`test/tools-contract.test.js`），
+  但真实写入链路仍需在用户确认后用测试任务验证。

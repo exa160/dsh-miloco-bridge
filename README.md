@@ -13,13 +13,13 @@
 
 | Agent 预设 | Miloco 配置页 |
 |---|---|
-| ![Agent 预设](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/doc/images/agent-presets.png) | ![Miloco 配置页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/doc/images/miloco-settings.png) |
+| ![Agent 预设](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/agent-presets.png) | ![Miloco 配置页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-settings.png) |
 
 > 截图使用演示数据；真实账号、内网地址与 token 用量已脱敏。
 
 ## 它解决什么问题
 
-- **Agent 隔离**：53 个 Miloco 工具和 18 个 Skill 只挂在专用预设「Miloco 家庭助手」上。
+- **Agent 隔离**：56 个 Miloco 工具和 18 个 Skill 只挂在专用预设「Miloco 家庭助手」上。
   普通对话看不到 `miloco_*` 工具，也不会被注入 Miloco 技能。
 - **完整能力**：设备、场景、感知、规则、任务、身份、宠物、家庭档案、通知、token 用量。
 - **推送闭环**：Miloco 的感知事件、规则触发、任务到期可以主动推送到 DSH 会话。
@@ -48,7 +48,7 @@ dsh plugin --profile web add github:exa160/dsh-miloco-bridge
 
 ```bash
 # 发布包
-dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.0.tgz
+dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.1.tgz
 
 # 本地开发（link）
 ./install.sh --profile web
@@ -57,7 +57,7 @@ dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.0.tgz
 ### Miloco 侧 adapter
 
 如果已安装 Miloco，`install.sh` 会自动安装 adapter、写入连接与推送令牌。
-手动步骤、systemd、升级与卸载见 [doc/INSTALL.md](doc/INSTALL.md)。
+手动步骤、systemd、升级与卸载见 [docs/INSTALL.md](docs/INSTALL.md)。
 
 安装后重启 DSH：
 
@@ -92,17 +92,17 @@ systemctl --user restart dsh-web.service
 
 | 文档 | 内容 |
 |---|---|
-| [doc/INSTALL.md](doc/INSTALL.md) | 安装、连接、adapter、systemd、升级/卸载、排错 |
-| [doc/VERIFICATION.md](doc/VERIFICATION.md) | 离线测试、真实 DSH/Miloco 验证、推送与过滤验证 |
-| [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) | 双半架构、路由、配置层、状态文件、推送协议 |
-| [doc/SKILL-REWRITES.md](doc/SKILL-REWRITES.md) | 为什么重写 18 个 Skill、改了什么、合规边界 |
-| [doc/TOOLS.md](doc/TOOLS.md) | 53 个工具的参数与语义 |
+| [docs/INSTALL.md](docs/INSTALL.md) | 安装、连接、adapter、systemd、升级/卸载、排错 |
+| [docs/VERIFICATION.md](docs/VERIFICATION.md) | 离线测试、真实 DSH/Miloco 验证、推送与过滤验证 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 双半架构、路由、配置层、状态文件、推送协议 |
+| [docs/SKILL-REWRITES.md](docs/SKILL-REWRITES.md) | 为什么重写 18 个 Skill、改了什么、合规边界 |
+| [docs/TOOLS.md](docs/TOOLS.md) | 56 个工具的参数与语义 |
 | [SECURITY.md](SECURITY.md) | 安全边界与漏洞报告 |
 
 ## 开发
 
 ```bash
-npm test                 # 50 项测试
+npm test                 # 65 项测试
 npm run selftest         # 离线自检
 npm run verify:readonly  # 真实 Miloco 只读接口
 npm run pack:bundle      # 生成 dist/*.tgz

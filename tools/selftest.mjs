@@ -50,7 +50,7 @@ await check('tool config', () => {
 await check('tool counts', () => {
   const client = createMilocoClient({})
   assert.equal(createMilocoTools({ client, readOnly: true }).length, 30)
-  assert.equal(createMilocoTools({ client, readOnly: false }).length, 53)
+  assert.equal(createMilocoTools({ client, readOnly: false }).length, 56)
 })
 
 await check('overlay shape', () => {

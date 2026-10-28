@@ -124,7 +124,7 @@ Xiaomi Miloco 的许可证对复制、修改、分发有明确限制。为了能
 | `miloco-devices` | 设备查询/控制/场景 | `miloco_device_*`、`miloco_scene_*` |
 | `miloco-perception` | 摄像头问答与事件回顾 | `miloco_perceive`、`miloco_perception_logs` |
 | `miloco-perception-digest` | 感知日志摘要 | `miloco_perception_logs`、`miloco_event_list` |
-| `miloco-create-task` | 规则/定时/统计/生命周期 | `miloco_rule_create`、`miloco_cron_create`、`miloco_task_create` |
+| `miloco-create-task` | 规则/定时/统计/生命周期 | `miloco_rule_create`、`miloco_cron_create`、`miloco_task_create`、`miloco_task_record_init` |
 | `miloco-terminate-task` | 终止并清理任务 | `miloco_task_delete` |
 | `miloco-notify` | 主动通知与文案 | `miloco_notify_push`、`dsh_deliver_message` |
 | `miloco-home-profile` | 档案查询与维护 | `miloco_home_profile*` |
@@ -153,7 +153,7 @@ Xiaomi Miloco 的许可证对复制、修改、分发有明确限制。为了能
 5. 家庭档案渲染接口返回 `{markdown: "..."}`，不是 `{rendered: "..."}`。
 
 这些坑在上游 Skill 中有的没有写、有的写成了旧接口；本仓库的 Skill 按真实接口行为编写，
-并在 `doc/TOOLS.md` 中保留说明。
+并在 `docs/TOOLS.md` 中保留说明。
 
 ---
 
@@ -162,7 +162,7 @@ Xiaomi Miloco 的许可证对复制、修改、分发有明确限制。为了能
 1. 起一个**默认预设**的新会话，发一句普通问题；
 2. 会话请求头里应有 **0 个** `miloco_*` 工具；
 3. 起一个 **Miloco 家庭助手** 预设的新会话；
-4. 只读模式应有 **30 个** `miloco_*` 工具；管家模式应有 **53 个**（30 读 + 23 写 + `dsh_deliver_message`）。
+4. 只读模式应有 **30 个** `miloco_*` 工具；管家模式应有 **56 个**（30 读 + 26 写 + `dsh_deliver_message`）。
 
 如果普通会话出现 `miloco_*`，说明 preset 作用域没生效，检查 `cordis.patch.yml` 中
 `preset-miloco` 的 `plugins` 是否指向 `dsh-miloco-bridge/tools`。

@@ -68,9 +68,7 @@
         id: miloco
         name: Miloco 家庭助手
         description: >-
-          家里的全屋智能管家：只读 / 管家两种模式，能看设备、问摄像头、查档案与用量。
-          米家工具与技能只在这个预设里；新建会话时选择它。
-          模式说明与使用示例见「设置 → 插件 → Miloco」。
+          家里的全屋智能管家：米家工具与技能隔离在这个预设中，能看设备、问摄像头、查档案与用量。
         order: 30
         plugins:
           - id: dsh-miloco-bridge-tools

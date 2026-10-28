@@ -88,6 +88,7 @@ async function fixture() {
     config: {
       readOnly: false,
       home: workdir,
+      deploy: { sourceDir: '/tmp/xiaomi-miloco' },
       push: { enabled: true, path: '/miloco/webhook', token: '', waitForResult: true },
       profilePatch: '',
     },
@@ -105,7 +106,7 @@ async function fixture() {
 describe('settings API', () => {
   it('registers every route', async () => {
     const { routes } = await fixture()
-    for (const path of ['/status', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall']) {
+    for (const path of ['/status', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status']) {
       assert.ok(routes.has(`${SETTINGS_PREFIX}${path}`), `missing ${path}`)
     }
   })
@@ -213,6 +214,24 @@ describe('settings API', () => {
     const { routes } = await fixture()
     const response = await invoke(routes.get(`${SETTINGS_PREFIX}/mode`), { body: { mode: 'root' } })
     assert.equal(response.status, 400)
+  })
+
+  it('version route exposes current/latest/deploy kind and git source root', async () => {
+    const { routes } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/version`), { method: 'GET' })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.version.version, '2026.10.16')
+    assert.equal(response.body.upgrade.latest, '2026.10.16')
+    assert.equal(response.body.upgrade.deploy_kind, 'release')
+    assert.ok(response.body.sourceRoot.endsWith('xiaomi-miloco'))
+    assert.equal(response.body.upgradeStatus.phase, 'idle')
+  })
+
+  it('upgrade route proxies the upstream one-click upgrade', async () => {
+    const { routes } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/upgrade`), { body: {} })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.data.started, true)
   })
 
   it('uninstall previews and requires the literal confirmation', async () => {

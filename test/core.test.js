@@ -79,7 +79,7 @@ describe('tools', () => {
     const read = createMilocoTools({ client, readOnly: true })
     const full = createMilocoTools({ client, readOnly: false })
     assert.equal(read.length, 30)
-    assert.equal(full.length, 53)
+    assert.equal(full.length, 56)
     const readNames = new Set(read.map(tool => tool.name))
     const fullNames = new Set(full.map(tool => tool.name))
     assert.ok(!readNames.has('miloco_device_control'))
@@ -87,7 +87,10 @@ describe('tools', () => {
       'miloco_device_control',
       'miloco_notify_push',
       'miloco_task_create',
+      'miloco_task_record_init',
+      'miloco_rule_delete',
       'miloco_task_delete',
+      'miloco_cron_delete',
       'miloco_scope_set',
       'miloco_person_create',
       'miloco_pet_reference_crops',
@@ -221,6 +224,8 @@ describe('client bundle', () => {
     assert.ok(source.includes('跟随模型默认'))
     assert.ok(source.includes('effortOptions'))
     assert.ok(source.includes('感知等级'))
+    assert.ok(source.includes('installPresetGuide'))
+    assert.ok(source.includes('dsh-miloco-preset-helpbar'))
     assert.ok(source.includes('input[type="radio"]'))
     assert.ok(source.includes('flex: 0 0 auto'))
     assert.ok(source.includes('仅高优先级'))
