@@ -35,6 +35,8 @@ describe('configuration', () => {
     assert.ok(String(config.deploy.sourceDir).includes('plugin-data'))
     assert.ok(String(config.deploy.sourceDir).endsWith('xiaomi-miloco'))
     assert.ok(!String(config.deploy.sourceDir).includes('default-workspace'))
+    assert.deepEqual(config.deploy.installArgs, ['--skip-openclaw', '--agent-platform=openclaw', '--lang=zh'])
+    assert.ok(config.deploy.githubMirrors.includes('https://gh-proxy.com/'))
   })
 
   it('tool half defaults match the preset', () => {
@@ -98,6 +100,23 @@ describe('tools', () => {
       'miloco_push_target_set',
     ]) {
       assert.ok(fullNames.has(name), `missing ${name}`)
+    }
+  })
+
+  it('keeps the standard DSH tool surface inside the Miloco preset', async () => {
+    const yaml = await readFile(join(ROOT, 'cordis.patch.yml'), 'utf8')
+    for (const name of [
+      '@deepseek-ai/dsh-tool-bash',
+      '@deepseek-ai/dsh-tool-fs',
+      '@deepseek-ai/dsh-tool-fs-search',
+      '@deepseek-ai/dsh-tool-web',
+      '@deepseek-ai/dsh-tool-ask-user',
+      '@deepseek-ai/dsh-tool-todo',
+      '@deepseek-ai/dsh-tool-skill',
+      '@deepseek-ai/dsh-tool-subagent',
+      '@deepseek-ai/dsh-tool-workflow',
+    ]) {
+      assert.ok(yaml.includes(name), `missing ${name}`)
     }
   })
 
@@ -229,6 +248,9 @@ describe('client bundle', () => {
     assert.ok(source.includes('input[type="radio"]'))
     assert.ok(source.includes('flex: 0 0 auto'))
     assert.ok(source.includes('仅高优先级'))
+    assert.ok(source.includes('检查失败'))
+    assert.ok(source.includes('mirrorCheck'))
+    assert.ok(source.includes('release 安装器'))
     assert.ok(!source.includes('插件完全不改会话模型'))
   })
 })

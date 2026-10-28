@@ -53,10 +53,22 @@
             minLevel: "all"
         deploy:
           repo: "https://github.com/XiaoMi/xiaomi-miloco"
+          # 一键部署下载官方 release install.sh，不再 clone 源码。
           # 留空 = $DSH_HOME/plugin-data/dsh-miloco-bridge/xiaomi-miloco
-          # 必须是 DSH 进程用户可读写的目录，不要指向只读工作区或插件 node_modules。
+          # （release 部署不创建该目录；仅保留给旧源码部署/卸载清理）
           sourceDir: ""
-          installArgs: ["--dev", "--skip-openclaw"]
+          # --skip-openclaw 阻止上游安装 OpenClaw 插件；--agent-platform=openclaw
+          # 只用于通过上游非交互式平台检测，实际由 DSH adapter 接管。
+          installArgs: ["--skip-openclaw", "--agent-platform=openclaw", "--lang=zh"]
+          # 直连 GitHub 失败时按顺序尝试这些镜像（直接拼接原 URL）。
+          githubMirrors:
+            - "https://gh-proxy.com/"
+            - "https://gh-proxy.org/"
+          # release 包默认从第一个镜像下载；留空 = 自动拼接 releases/download。
+          downloadSite: ""
+          # 额外的 uv 索引，不覆盖用户默认索引；PyPI 带 upload-time 元数据，
+          # 部分国内镜像缺少该元数据会触发安装器 exclude-newer 解析失败。
+          uvIndex: "https://pypi.org/simple"
         # 设置页里不展示任何「DSH 默认模型」配置项。模型下拉只有
         # 「跟随该对话」+ 实际模型；不选模型就完全不动会话的模型选择。
     # ------------------------------------------------------------------
@@ -83,3 +95,68 @@
               overlayFile: ""
               stateFile: ""
               cwd: ""
+          # 保留标准 DSH Agent 的工具面；子插件只在 miloco 预设内生效。
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: tool-schedule
+            name: '@deepseek-ai/dsh-tool-schedule'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent-list-agents
+                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelectionSettings: true
+              - id: tool-subagent-fork
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: fork
+                  toolName: subagent_fork
+              - id: workflow-ptc
+                name: '@deepseek-ai/dsh-workflow-ptc'
+                config:
+                  provider: spawn
+              - id: tool-workflow
+                name: '@deepseek-ai/dsh-tool-workflow'

@@ -4,8 +4,16 @@ import { describe, it } from 'node:test'
 import { createMilocoTools } from '../lib/tools.js'
 
 const DEVICES = [
-  { did: 'light-1', name: '吸顶灯', room_name: '客厅', online: true },
-  { did: 'light-2', name: '台灯', room_name: '书房', online: true },
+  {
+    did: 'light-1', name: '吸顶灯', room_name: '客厅', online: true,
+    model: 'yeelink.light.ceiling18', home_id: 'home-1', icon: 'https://icon/1',
+    local_ip: '192.0.2.11', home_name: '家',
+  },
+  {
+    did: 'light-2', name: '台灯', room_name: '书房', online: false,
+    model: 'yeelink.light.ceiling13', home_id: 'home-1', icon: 'https://icon/2',
+    local_ip: '192.0.2.12', home_name: '家',
+  },
 ]
 
 function harness() {
@@ -141,11 +149,46 @@ describe('Miloco v2 write contracts', () => {
 })
 
 describe('read and auxiliary write contracts', () => {
-  it('filters devices locally without sending an unsupported room query', async () => {
+  it('returns a compact filtered device list without an unsupported room query', async () => {
     const { calls, tool } = harness()
     const result = JSON.parse(await tool('miloco_device_list').execute({ room: '客厅' }))
     assert.equal(calls[0].query, null)
-    assert.deepEqual(result.map(device => device.did), ['light-1'])
+    assert.equal(result.total, 1)
+    assert.equal(result.returned, 1)
+    assert.deepEqual(result.devices.map(device => device.did), ['light-1'])
+    assert.deepEqual(Object.keys(result.devices[0]).sort(), [
+      'did', 'home_id', 'model', 'name', 'online', 'room_name',
+    ])
+  })
+
+  it('filters by online/name and paginates', async () => {
+    const { tool } = harness()
+    const online = JSON.parse(await tool('miloco_device_list').execute({ online_only: true }))
+    assert.deepEqual(online.devices.map(device => device.did), ['light-1'])
+    const named = JSON.parse(await tool('miloco_device_list').execute({ name: '台灯' }))
+    assert.deepEqual(named.devices.map(device => device.did), ['light-2'])
+    const page = JSON.parse(await tool('miloco_device_list').execute({ limit: 1, offset: 1 }))
+    assert.equal(page.total, 2)
+    assert.equal(page.returned, 1)
+    assert.deepEqual(page.devices.map(device => device.did), ['light-2'])
+  })
+
+  it('only adds explicitly requested extra fields', async () => {
+    const { tool } = harness()
+    const result = JSON.parse(await tool('miloco_device_list').execute({
+      include: ['icon', 'local_ip', 'home_name'],
+    }))
+    assert.equal(result.devices[0].icon, 'https://icon/1')
+    assert.equal(result.devices[0].local_ip, '192.0.2.11')
+    assert.equal(result.devices[0].home_name, '家')
+    await assert.rejects(
+      () => tool('miloco_device_list').execute({ include: ['secret'] }),
+      /include 不支持字段/,
+    )
+    await assert.rejects(
+      () => tool('miloco_device_list').execute({ limit: 501 }),
+      /limit/,
+    )
   })
 
   it('keeps the device control enum and body shape aligned', async () => {

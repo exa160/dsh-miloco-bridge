@@ -12,7 +12,7 @@ whenToUse: 用户说“开/关/调/查某台设备”“客厅多少度”“执
 
 | 目的 | 工具 |
 |---|---|
-| 找设备 did | `miloco_device_list(room?)` |
+| 找设备 did | `miloco_device_list(room?, online_only?, name?, include?)` |
 | 读 SPEC / iid | `miloco_device_spec(did)` |
 | 读当前属性 | `miloco_device_status(did, iid?)` |
 | 控制设备（写） | `miloco_device_control(...)` |
@@ -21,7 +21,7 @@ whenToUse: 用户说“开/关/调/查某台设备”“客厅多少度”“执
 
 ## 查询流程
 
-1. `miloco_device_list` 拿 did。名字相同或跨房间时先缩小范围，不猜。
+1. `miloco_device_list` 拿 did（结果在 `devices` 数组里）。名字相同或跨房间时用 `name` / `room` / `online_only` 先缩小范围，不猜。
 2. `miloco_device_status` 读状态。传 `iid` 读单项，不传读全部。
 3. 回答里带上设备名、房间、关键数值和时间（若后端返回）。
 
@@ -42,6 +42,7 @@ whenToUse: 用户说“开/关/调/查某台设备”“客厅多少度”“执
 - 门锁、燃气阀、摄像头开关、厨房电器等有物理风险的操作，先说明将要做什么并取得确认。
 - 不要把“感知事件里的 did”当成控制目标：事件 did 通常是摄像头/传感器。
 - 不确定设备是否存在时重新 `miloco_device_list` 或 `miloco_home_info(refresh=true)`，禁止编造 did。
+- 需要 `icon`、`local_ip` 等默认裁剪字段时，用 `include=[...]` 显式请求，不要为了一个字段重拉全量原始对象。
 
 ## 场景
 

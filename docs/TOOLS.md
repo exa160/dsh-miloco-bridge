@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `miloco_status` | — | `/api/admin/status` + `/api/perception/engine/status` | 运行状态、账号、引擎、数据库 |
 | `miloco_capabilities` | — | — | 当前模式与已注册工具 |
-| `miloco_device_list` | `room?` | `/api/miot/device_list` | 设备清单；`room` 在本地按 `room_name` 过滤 |
+| `miloco_device_list` | `room?`, `name?`, `online_only?`, `limit?`, `offset?`, `include?[]` | `/api/miot/device_list` | 默认 `did/name/online/room_name/model/home_id`，默认最多 500 台；`include` 可取 `icon/local_ip/home_name/order_time/lan_online/sub_devices` |
 | `miloco_device_spec` | `did` | `/api/miot/devices/{did}/spec` | SPEC：iid、access、枚举、范围 |
 | `miloco_device_status` | `did`, `iid?` | `/api/miot/devices/{did}/status` | 当前属性值 |
 | `miloco_device_history` | — | `/api/miot/device_history` | 最近访问的 iid |

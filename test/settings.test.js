@@ -25,7 +25,7 @@ after(async () => {
  * Build the settings API with fake host services.
  * @returns {Promise<any>} Fixture.
  */
-async function fixture() {
+async function fixture(options = {}) {
   const overlay = createOverlay({ file: join(workdir, `overlay-${Math.random().toString(16).slice(2)}.json`) })
   await overlay.write({
     connection: { baseUrl: '', token: '' },
@@ -67,12 +67,18 @@ async function fixture() {
     },
   }
 
-  const client = createMilocoClient({ baseUrl: miloco.baseUrl, timeoutMs: 5_000, home: workdir, overlay })
+  const client = createMilocoClient({ baseUrl: options.milocoBaseUrl || miloco.baseUrl, timeoutMs: 5_000, home: workdir, overlay })
   const written = []
+  const upgradeCalls = []
   const deploy = {
     state: () => ({ running: false, step: 'idle', sourceDir: '/tmp/src', milocoHome: workdir }),
     tail: async () => '',
     start: async () => ({ started: true }),
+    upgradeState: () => ({ running: false, step: 'idle', startedAt: null, exitCode: null }),
+    startUpgrade: async opts => {
+      upgradeCalls.push(opts)
+      return { started: true, logPath: '/tmp/upgrade.log' }
+    },
   }
   const uninstallCalls = []
   const uninstall = {
@@ -88,7 +94,7 @@ async function fixture() {
     config: {
       readOnly: false,
       home: workdir,
-      deploy: { sourceDir: '/tmp/xiaomi-miloco' },
+      deploy: { sourceDir: '/tmp/xiaomi-miloco', ...(options.deploy ?? {}) },
       push: { enabled: true, path: '/miloco/webhook', token: '', waitForResult: true },
       profilePatch: '',
     },
@@ -100,7 +106,7 @@ async function fixture() {
     writeConfig: async values => { written.push(values); return { ok: true, changed: ['baseUrl', 'token'], missing: [] } },
     logger: ctx.logger,
   })
-  return { routes, ctx, client, overlay, state, deploy, uninstall, uninstallCalls, written, dispose }
+  return { routes, ctx, client, overlay, state, deploy, upgradeCalls, uninstall, uninstallCalls, written, dispose }
 }
 
 describe('settings API', () => {
@@ -225,6 +231,73 @@ describe('settings API', () => {
     assert.equal(response.body.upgrade.deploy_kind, 'release')
     assert.ok(response.body.sourceRoot.endsWith('xiaomi-miloco'))
     assert.equal(response.body.upgradeStatus.phase, 'idle')
+  })
+
+  it('falls back to a GitHub mirror when the backend cannot reach GitHub', async () => {
+    const backend = await createFakeMiloco({
+      '/api/admin/version': { code: 0, data: { version: '2026.9.11', git: { commit_short: 'old', dirty: false } } },
+      '/api/admin/upgrade/check': {
+        code: 0,
+        data: { current: '2026.9.11', latest: null, has_update: false, deploy_kind: 'release', reachable: false },
+      },
+    })
+    const mirror = await createFakeMiloco({
+      '/https://api.github.invalid/repos/XiaoMi/xiaomi-miloco/releases/latest': {
+        tag_name: 'v2026.10.16',
+        html_url: 'https://github.com/XiaoMi/xiaomi-miloco/releases/tag/v2026.10.16',
+      },
+    })
+    try {
+      const { routes, dispose } = await fixture({
+        milocoBaseUrl: backend.baseUrl,
+        deploy: { githubApi: 'https://api.github.invalid', githubMirrors: [mirror.baseUrl] },
+      })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/version`), { method: 'GET' })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.upgrade.source, 'mirror')
+      assert.equal(response.body.upgrade.latest, '2026.10.16')
+      assert.equal(response.body.upgrade.has_update, true)
+      assert.ok(response.body.upgrade.release_url.startsWith(mirror.baseUrl))
+      dispose()
+    } finally {
+      await backend.close()
+      await mirror.close()
+    }
+  })
+
+  it('starts a plugin-side upgrade after a mirror check', async () => {
+    const backend = await createFakeMiloco({
+      '/api/admin/version': { code: 0, data: { version: '2026.9.11', git: { commit_short: 'old', dirty: false } } },
+      '/api/admin/upgrade/check': {
+        code: 0,
+        data: { current: '2026.9.11', latest: null, has_update: false, deploy_kind: 'release', reachable: false },
+      },
+    })
+    const mirror = await createFakeMiloco({
+      '/https://api.github.invalid/repos/XiaoMi/xiaomi-miloco/releases/latest': {
+        tag_name: 'v2026.10.16',
+        html_url: 'https://github.com/XiaoMi/xiaomi-miloco/releases/tag/v2026.10.16',
+      },
+    })
+    try {
+      const { routes, deploy, upgradeCalls, dispose } = await fixture({
+        milocoBaseUrl: backend.baseUrl,
+        deploy: { githubApi: 'https://api.github.invalid', githubMirrors: [mirror.baseUrl] },
+      })
+      await invoke(routes.get(`${SETTINGS_PREFIX}/version`), { method: 'GET' })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/upgrade`), { body: {} })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.source, 'plugin')
+      assert.equal(upgradeCalls.length, 1)
+      deploy.upgradeState = () => ({ running: true, step: 'installing', startedAt: 'now', exitCode: null })
+      const status = await invoke(routes.get(`${SETTINGS_PREFIX}/upgrade/status`), { method: 'GET' })
+      assert.equal(status.body.source, 'plugin')
+      assert.equal(status.body.status.phase, 'installing')
+      dispose()
+    } finally {
+      await backend.close()
+      await mirror.close()
+    }
   })
 
   it('upgrade route proxies the upstream one-click upgrade', async () => {

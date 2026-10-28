@@ -33,14 +33,14 @@ npm 新包可能处于审核期；若 `dsh plugin add dsh-miloco-bridge` 暂时 
 
 ```bash
 npm run pack:bundle
-# dist/dsh-miloco-bridge-0.1.1.tgz
-dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.1.tgz"
+# dist/dsh-miloco-bridge-0.1.2.tgz
+dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.2.tgz"
 ```
 
 或：
 
 ```bash
-./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.1.tgz
+./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.2.tgz
 ```
 
 ### 1.3 手动配置
@@ -94,16 +94,17 @@ install.sh
 3. 点「一键部署 Miloco」；
 4. 面板会实时显示部署日志。流程：
    - 若检测到已安装的 `miloco-cli` 与 `$MILOCO_HOME/config.json`，先尝试 `service start`；
-   - 否则 clone `https://github.com/XiaoMi/xiaomi-miloco` 到
-     `$DSH_HOME/plugin-data/dsh-miloco-bridge/xiaomi-miloco`；
-   - 运行上游 `scripts/install.sh --dev --skip-openclaw`；
+   - 否则下载官方 release `install.sh`（GitHub 直连失败时走 `gh-proxy.com` / `gh-proxy.org`）；
+   - 以 headless agent 模式运行 `install.sh --agent-prepare --skip-openclaw --agent-platform=openclaw --lang=zh`
+     和 `install.sh --agent-finish ...`（`openclaw` 只用于通过上游平台检测，不会安装 OpenClaw 插件）；
+   - 安装器使用 `UV_CACHE_DIR=$MILOCO_HOME/.uv-cache`、额外 `UV_INDEX`（默认 PyPI）
+     和镜像下载 release 包（`MILOCO_DOWNLOAD_URL`，默认第一个 GitHub 镜像）；
    - 启动后端并等待 `127.0.0.1:1810` 健康；
    - 安装本插件的 adapter，生成/复用推送令牌，写入 overlay。
 5. 部署完成后按面板提示绑定米家账号、开启摄像头感知。
 
-> **部署目录必须可写**：默认是 `$DSH_HOME/plugin-data/dsh-miloco-bridge/xiaomi-miloco`
-> （`$DSH_HOME` 默认 `~/.dsh`，跟随环境变量）。不要指向只读工作区、`node_modules`
-> 或其它 DSH 进程用户不可写的路径；部署前会显式检查并给出中文错误。
+> **MILOCO_HOME 必须可写**：默认 `~/.miloco`，部署前会显式检查并给出中文错误。
+> release 部署不再创建源码目录；`deploy.sourceDir` 仅用于旧源码部署或卸载清理。
 
 > 一键部署会运行上游安装器，可能安装 Python 依赖并占用较多磁盘。
 > 请先确认你接受 Xiaomi Miloco 的许可证与资源开销。
@@ -272,9 +273,19 @@ systemctl --user restart dsh-web.service
 
 ```bash
 npm run pack:bundle
-dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.1.tgz"
+dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.2.tgz"
 systemctl --user restart dsh-web.service
 ```
+
+### 8.3 Miloco 版本更新
+
+「运行状态 → 检查更新」按顺序检查：Miloco 后端 → 直连 GitHub → GitHub 镜像。
+
+- 后端能访问 GitHub：走 Miloco 原有一键升级；
+- 后端不可达但镜像可用：由插件下载 release 安装器并执行 headless 升级
+  （`--agent-prepare` + `--agent-finish`，继续使用 `MILOCO_HOME` 和镜像下载）；
+- 源码/dev 部署不提供一键升级；
+- 升级过程写入 `$MILOCO_HOME/log/dsh-miloco-upgrade.log`。
 
 卸载插件：
 

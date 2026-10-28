@@ -48,7 +48,7 @@ dsh plugin --profile web add github:exa160/dsh-miloco-bridge
 
 ```bash
 # 发布包
-dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.1.tgz
+dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.2.tgz
 
 # 本地开发（link）
 ./install.sh --profile web
@@ -102,7 +102,7 @@ systemctl --user restart dsh-web.service
 ## 开发
 
 ```bash
-npm test                 # 65 项测试
+npm test                 # 76 项测试
 npm run selftest         # 离线自检
 npm run verify:readonly  # 真实 Miloco 只读接口
 npm run pack:bundle      # 生成 dist/*.tgz

@@ -36,7 +36,7 @@ lib/
 ├── miloco-client.js    Miloco HTTP 客户端（连接优先级、envelope 解包）
 ├── push.js             入站推送：鉴权、目标解析、会话恢复、等待 turn
 ├── settings-api.js     设置 API 路由
-├── deploy.js           一键部署（启动已有 / clone + 安装 / 写 adapter）
+├── deploy.js           一键部署（启动已有 / 下载 release 安装器 / 写 adapter）
 ├── uninstall.js        卸载 Miloco（停服务 / 移除 adapter / 可选删数据或源码）
 ├── perception.js       感知事件优先级解析与阈值过滤
 ├── client.js           浏览器设置页（无构建步骤）
@@ -194,13 +194,20 @@ push.perception.minLevel = all | low | medium | high
 
 1. 健康检查 `127.0.0.1:1810`；
 2. 已装 Miloco → `miloco-cli service start`；
-3. 未装 → `git clone` 官方仓库到 `$DSH_HOME/plugin-data/dsh-miloco-bridge/xiaomi-miloco`；
-4. 运行 `scripts/install.sh --dev --skip-openclaw`；
+3. 未装 → 下载官方 release `install.sh`（直连失败时走 GitHub 镜像）；
+4. 以 headless agent 模式运行 `install.sh --agent-prepare` + `--agent-finish`
+   （`--skip-openclaw --agent-platform=openclaw --lang=zh`）；
 5. 启动服务并等待健康；
 6. 安装 adapter，写令牌；
 7. 写 overlay 的连接与推送令牌。
 
-所有子进程用 `spawn(command, args)`，不做 shell 字符串拼接；仓库地址必须是 `https://`。
+所有子进程用 `spawn(command, args)`，不做 shell 字符串拼接。
+`--agent-platform=openclaw` 只用于通过上游平台的非交互检测，
+`--skip-openclaw` 保证不安装 OpenClaw 插件，实际由 DSH adapter 接管。
+
+镜像模式的一键升级复用同一 release 安装器：下载 → `--agent-prepare` →
+`--agent-finish` → 启动服务 → 写 adapter/webhook。升级状态与日志独立于部署，
+日志在 `$MILOCO_HOME/log/dsh-miloco-upgrade.log`；命令参数和子进程输出都会脱敏。
 
 ## 9. 安全边界
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-miloco-bridge",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unofficial DSH bridge for Xiaomi Miloco: an isolated Agent preset for Miloco tools, native tools/skills, Web settings, perception-priority filtering, and Miloco -> DSH push.",
   "keywords": [
     "dsh",
