@@ -120,6 +120,59 @@ describe('tools', () => {
     }
   })
 
+  it('matches the DSH 0.2.x subagent rows', async () => {
+    const yaml = await readFile(join(ROOT, 'cordis.patch.yml'), 'utf8')
+    assert.ok(!yaml.includes('dsh-tool-subagent-control/list-agents'))
+    assert.ok(!yaml.includes('modelSelectionSettings'))
+    assert.ok(yaml.includes('modelSelection: true'))
+    assert.ok(yaml.includes('modelDiscovery: true'))
+  })
+
+  it('drops skills registered after the plugin scope was disposed', async () => {
+    let alive = true
+    let effectsAfterDispose = 0
+    let disposedSkills = 0
+    const injections = []
+    const host = {
+      get fiber() {
+        return { uid: alive ? 7 : null, state: alive ? 2 : 4 }
+      },
+      logger: { info() {}, warn() {} },
+      tools: { register() { return () => {} } },
+      skills: {
+        register() {
+          return () => { disposedSkills++ }
+        },
+      },
+      sessionController: { modelCatalog: async () => ({ groups: [] }) },
+      effect() {
+        if (!alive) effectsAfterDispose++
+        return () => {}
+      },
+      inject(deps, callback) {
+        injections.push({ deps, callback })
+      },
+    }
+
+    await toolsHalf.apply(host, {
+      stateFile: join(workdir, 'resilience-state.json'),
+      overlayFile: join(workdir, 'resilience-overlay.json'),
+    })
+    const skillsInjection = injections.find(entry => entry.deps.includes('skills'))
+    assert.ok(skillsInjection, 'skills injection was not registered')
+    skillsInjection.callback(host)
+
+    // Tear the preset down while the skill files are still being read.
+    alive = false
+    const deadline = Date.now() + 2000
+    while (disposedSkills < 18 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 5))
+    }
+
+    assert.equal(effectsAfterDispose, 0)
+    assert.equal(disposedSkills, 18)
+  })
+
   it('a tool call records its durable session id', async () => {
     const state = createStateStore({ file: join(workdir, 'state-tool.json') })
     const client = {
