@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
@@ -260,6 +260,11 @@ describe('skills', () => {
       assert.ok(skill.name.startsWith('miloco-'))
       assert.ok(skill.description.length > 20)
       assert.ok(skill.content.length > 200)
+      // DSH rejects a loaded skill whose `source` is not a string; keep it a
+      // stable label rather than exposing the absolute file path.
+      assert.equal(skill.source, 'dsh-miloco-bridge', `${skill.name} has an unexpected source`)
+      assert.ok(isAbsolute(skill.path), `${skill.name} path is not absolute`)
+      assert.ok(skill.path.endsWith('/SKILL.md'), `${skill.name} path does not point at SKILL.md`)
       assert.ok(!/openclaw|miloco-cli/i.test(skill.content), `${skill.name} still references an external CLI`)
       assert.ok(!/^\s*你是/m.test(skill.content), `${skill.name} asserts an agent identity`)
     }
