@@ -303,6 +303,8 @@ describe('client bundle', () => {
     assert.ok(source.includes('仅高优先级'))
     assert.ok(source.includes('检查失败'))
     assert.ok(source.includes('mirrorCheck'))
+    assert.ok(source.includes('sessionFocusCleared'))
+    assert.ok(source.includes('当前：'))
     assert.ok(source.includes('release 安装器'))
     assert.ok(!source.includes('插件完全不改会话模型'))
   })
