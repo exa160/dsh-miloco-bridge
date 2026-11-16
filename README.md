@@ -48,7 +48,7 @@ dsh plugin --profile web add github:exa160/dsh-miloco-bridge
 
 ```bash
 # 发布包
-dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.3.tgz
+dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.4.tgz
 
 # 本地开发（link）
 ./install.sh --profile web
