@@ -6,7 +6,7 @@ import { after, before, describe, it } from 'node:test'
 
 import { createPushService, sessionIdForMilocoKey } from '../lib/push.js'
 import { createOverlay } from '../lib/overlay.js'
-import { createStateStore, noteSession, readSessions } from '../lib/state.js'
+import { createStateStore, noteSession, readPushLog, readSessions } from '../lib/state.js'
 import { createFakeSessionController, invoke } from './helpers.js'
 
 let workdir
@@ -15,7 +15,7 @@ after(async () => { await rm(workdir, { recursive: true, force: true }) })
 
 /**
  * Build a push service with a fresh overlay/state pair.
- * @param {{existing?: string[], target?: string, provider?: string, model?: string, token?: string, waitForResult?: boolean, review?: string, agentFollowup?: boolean, agentError?: boolean, home?: any}} [options] - Fixture options.
+ * @param {{existing?: string[], target?: string, mode?: 'archive'|'session', provider?: string, model?: string, token?: string, waitForResult?: boolean, review?: string, agentFollowup?: boolean, agentError?: boolean, home?: any}} [options] - Fixture options.
  * @returns {Promise<any>} Fixture.
  */
 async function fixture(options = {}) {
@@ -64,7 +64,7 @@ async function fixture(options = {}) {
       path: '/miloco/webhook',
       token: '',
       waitForResult: options.waitForResult === true,
-      target: { sessionId: '', agentPreset: 'miloco' },
+      target: { mode: options.mode ?? 'session', sessionId: '', agentPreset: 'miloco' },
       model: { provider: '', model: '', reasoningEffort: '' },
     },
   }
@@ -73,6 +73,7 @@ async function fixture(options = {}) {
     config,
     logger: ctx.logger,
     overlay,
+    state,
     home: options.home,
     agentPreset: 'miloco',
     activity: {
@@ -221,6 +222,61 @@ describe('folded delivery', () => {
     const created = fake.requests.find(request => request.sessionId !== undefined)
     // A session created for a push works in the household workspace directory.
     assert.equal(created?.cwd, homeDir)
+  })
+})
+
+describe('target modes', () => {
+  it('archive mode creates the dedicated session with the household cwd and preset', async () => {
+    const homeDir = join(workdir, `archive-home-${Math.random().toString(16).slice(2)}`)
+    const { service, fake, state } = await fixture({
+      mode: 'archive',
+      home: {
+        dir: homeDir,
+        ensure: async () => ({ path: homeDir, workspaceId: 'ws', title: '家庭助手', agentPreset: 'miloco' }),
+      },
+    })
+    const first = await service.deliver({ message: '有人按门铃', title: '门口' })
+    assert.equal(first.sessionId, 'miloco-archive')
+    assert.equal(first.source, 'archive')
+
+    const created = fake.requests.filter(request => request.sessionId === 'miloco-archive')
+    assert.equal(created.length, 1)
+    assert.equal(created[0].cwd, homeDir)
+    assert.equal(created[0].agentPreset, 'miloco')
+    assert.ok(fake.calls.some(call => call[0] === 'rename'
+      && call[1] === 'miloco-archive' && call[2] === 'Miloco 推送归档'))
+
+    const log = await readPushLog(state)
+    assert.equal(log[0].sessionId, 'miloco-archive')
+    assert.equal(log[0].status, 'ok')
+
+    const second = await service.deliver({ message: '第二次' })
+    assert.equal(second.sessionId, 'miloco-archive')
+    assert.equal(fake.requests.filter(request => request.sessionId === 'miloco-archive').length, 1)
+  })
+
+  it('session mode keeps the last-Miloco fallback', async () => {
+    const { service } = await fixture({ mode: 'session', existing: ['last-session'], review: 'last-session' })
+    const result = await service.deliver({ message: 'hello' })
+    assert.equal(result.sessionId, 'last-session')
+    assert.equal(result.source, 'last-miloco-session')
+  })
+
+  it('the overlay mode wins over the static config', async () => {
+    const { service, overlay } = await fixture({ mode: 'session', existing: ['s1'], target: 's1' })
+    await overlay.write({ push: { target: { mode: 'archive' } } })
+    const result = await service.deliver({ message: 'hello' })
+    assert.equal(result.sessionId, 'miloco-archive')
+    assert.equal(result.source, 'archive')
+  })
+
+  it('records a failed delivery in the push log', async () => {
+    const { service, fake, state } = await fixture({ mode: 'session', existing: ['s1'], target: 's1' })
+    fake.controller.onPrompt(() => { throw new Error('prompt down') })
+    await assert.rejects(service.deliver({ message: 'hello' }), /prompt down/)
+    const log = await readPushLog(state)
+    assert.equal(log[0].status, 'error')
+    assert.equal(log[0].sessionId, 's1')
   })
 })
 

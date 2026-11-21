@@ -138,6 +138,10 @@ export function createFakeSessionController(options = {}) {
       existing.add(request.sessionId)
       return { sessionId: request.sessionId }
     },
+    async rename(request) {
+      calls.push(['rename', request.sessionId, request.title])
+      return { sessionId: request.sessionId, title: request.title }
+    },
     async selectModel(request) {
       calls.push(['selectModel', request.sessionId, request.provider, request.model, request.reasoningEffort])
       return { selected: request }

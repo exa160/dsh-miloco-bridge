@@ -81,7 +81,7 @@ await check('state', async () => {
 
 await check('push target: last session, model untouched', async () => {
   const overlay = createOverlay({ file: join(workdir, 'overlay.json') })
-  await overlay.write({ push: { token: 't', target: { sessionId: '' }, model: {} } })
+  await overlay.write({ push: { token: 't', target: { mode: 'session', sessionId: '' }, model: {} } })
   const calls = []
   const ctx = {
     logger: { info() {}, warn() {} },
@@ -95,7 +95,7 @@ await check('push target: last session, model untouched', async () => {
   }
   const service = createPushService({
     ctx,
-    config: { push: { enabled: true, path: '/p', token: 't', waitForResult: false, target: { sessionId: '' }, model: {} } },
+    config: { push: { enabled: true, path: '/p', token: 't', waitForResult: false, target: { mode: 'session', sessionId: '' }, model: {} } },
     overlay,
     agentPreset: 'miloco',
     activity: { last: async () => 'last-session' },
