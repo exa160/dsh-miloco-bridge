@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 
 import { registerSettingsApi, SETTINGS_PREFIX } from '../lib/settings-api.js'
+import { createHomeService } from '../lib/home.js'
 import { createMilocoClient } from '../lib/miloco-client.js'
 import { createOverlay } from '../lib/overlay.js'
 import { createStateStore, noteSession } from '../lib/state.js'
@@ -89,6 +90,22 @@ async function fixture(options = {}) {
       return { ok: true, note: 'uninstalled' }
     },
   }
+  const homeDir = join(workdir, 'home-workspace')
+  const home = createHomeService({
+    ctx: {
+      logger: ctx.logger,
+      get(name) {
+        if (name === 'workspaceRegistry') {
+          return {
+            async create(path, title) { return { id: 'ws-home', path, title } },
+          }
+        }
+        return undefined
+      },
+    },
+    config: { workspace: { dir: homeDir, title: 'Miloco 家庭助手', agentPreset: 'miloco' } },
+    logger: ctx.logger,
+  })
   const dispose = registerSettingsApi({
     ctx,
     config: {
@@ -103,18 +120,37 @@ async function fixture(options = {}) {
     state,
     deploy,
     uninstall,
+    home,
     writeConfig: async values => { written.push(values); return { ok: true, changed: ['baseUrl', 'token'], missing: [] } },
     logger: ctx.logger,
   })
-  return { routes, ctx, client, overlay, state, deploy, upgradeCalls, uninstall, uninstallCalls, written, dispose }
+  return { routes, ctx, client, overlay, state, deploy, upgradeCalls, uninstall, uninstallCalls, written, home, dispose }
 }
 
 describe('settings API', () => {
   it('registers every route', async () => {
     const { routes } = await fixture()
-    for (const path of ['/status', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status']) {
+    for (const path of ['/status', '/home', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status']) {
       assert.ok(routes.has(`${SETTINGS_PREFIX}${path}`), `missing ${path}`)
     }
+  })
+
+  it('home route exposes the workspace path, id, title and preset', async () => {
+    const { routes } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { method: 'GET' })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.ok, true)
+    assert.equal(response.body.path, join(workdir, 'home-workspace'))
+    assert.equal(response.body.workspaceId, 'ws-home')
+    assert.equal(response.body.title, 'Miloco 家庭助手')
+    assert.equal(response.body.agentPreset, 'miloco')
+  })
+
+  it('home route refuses other methods', async () => {
+    const { routes } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { method: 'POST', body: {} })
+    assert.equal(response.status, 405)
+    assert.equal(response.body.ok, false)
   })
 
   it('status reports household overview, conversations and no default-model field', async () => {

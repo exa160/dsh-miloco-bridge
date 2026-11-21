@@ -39,6 +39,28 @@ describe('configuration', () => {
     assert.ok(config.deploy.githubMirrors.includes('https://gh-proxy.com/'))
   })
 
+  it('normalises the household workspace configuration', () => {
+    const defaults = infra.normalizeConfig({})
+    assert.equal(defaults.workspace.dir, '')
+    assert.equal(defaults.workspace.title, 'Miloco 家庭助手')
+    assert.equal(defaults.workspace.agentPreset, 'miloco')
+    // `home` stays the Miloco backend install directory.
+    assert.equal(typeof defaults.home, 'string')
+
+    const configured = infra.normalizeConfig({
+      workspace: { dir: '~/miloco-home', title: '家', agentPreset: 'other' },
+    })
+    assert.equal(configured.workspace.dir, '~/miloco-home')
+    assert.equal(configured.workspace.title, '家')
+    assert.equal(configured.workspace.agentPreset, 'other')
+
+    // The design document's `home` object shape is accepted as well.
+    const viaHome = infra.normalizeConfig({ home: { dir: '/tmp/h', title: 'T' } })
+    assert.equal(viaHome.workspace.dir, '/tmp/h')
+    assert.equal(viaHome.workspace.title, 'T')
+    assert.equal(viaHome.workspace.agentPreset, 'miloco')
+  })
+
   it('tool half defaults match the preset', () => {
     const config = toolsHalf.normalizeConfig({})
     assert.equal(config.readOnly, true)

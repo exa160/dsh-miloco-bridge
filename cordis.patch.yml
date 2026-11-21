@@ -24,8 +24,16 @@
         # 留空 = 自动读取 $MILOCO_HOME/config.json 的 server.url / server.token。
         baseUrl: ""
         token: ""
+        # Miloco 后端安装目录。
         home: "~/.miloco"
         timeoutMs: 30000
+        # 家庭助手专属工作区：插件自己创建这个目录并注册成宿主工作区，
+        # 该工作区下的会话一律使用 `agentPreset` 指定的 Agent 预设。
+        workspace:
+          # 空 = $DSH_HOME/plugin-data/dsh-miloco-bridge/home
+          dir: ""
+          title: "Miloco 家庭助手"
+          agentPreset: "miloco"
         # 留空 = $DSH_HOME/miloco-plugin.json / $DSH_HOME/miloco-plugin.state.json
         overlayFile: ""
         stateFile: ""

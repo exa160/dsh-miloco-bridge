@@ -15,7 +15,7 @@ after(async () => { await rm(workdir, { recursive: true, force: true }) })
 
 /**
  * Build a push service with a fresh overlay/state pair.
- * @param {{existing?: string[], target?: string, provider?: string, model?: string, token?: string, waitForResult?: boolean, review?: string}} [options] - Fixture options.
+ * @param {{existing?: string[], target?: string, provider?: string, model?: string, token?: string, waitForResult?: boolean, review?: string, agentFollowup?: boolean, agentError?: boolean, home?: any}} [options] - Fixture options.
  * @returns {Promise<any>} Fixture.
  */
 async function fixture(options = {}) {
@@ -36,7 +36,12 @@ async function fixture(options = {}) {
   const state = createStateStore({ file: join(workdir, `state-${Math.random().toString(16).slice(2)}.json`) })
   if (options.review) await noteSession(state, options.review)
 
-  const fake = createFakeSessionController({ existing: options.existing ?? [] })
+  const fake = createFakeSessionController({
+    existing: options.existing ?? [],
+    agentFollowup: options.agentFollowup === true,
+    agentError: options.agentError === true,
+  })
+  const flushed = []
   const ctx = {
     logger: { info() {}, warn() {} },
     sessionController: fake.controller,
@@ -44,6 +49,12 @@ async function fixture(options = {}) {
     webServer: { register() { return () => {} } },
     effect() {},
     on: fake.on,
+    get(name) {
+      if (name === 'sessions') {
+        return { flush: async session => { flushed.push(session); return true } }
+      }
+      return undefined
+    },
   }
   const config = {
     cwd: '/tmp',
@@ -62,6 +73,7 @@ async function fixture(options = {}) {
     config,
     logger: ctx.logger,
     overlay,
+    home: options.home,
     agentPreset: 'miloco',
     activity: {
       last: async () => (await readSessions(state)).last,
@@ -69,7 +81,7 @@ async function fixture(options = {}) {
       clear: async () => {},
     },
   })
-  return { service, fake, overlay, state, ctx }
+  return { service, fake, overlay, state, ctx, flushed }
 }
 
 describe('target semantics', () => {
@@ -124,6 +136,91 @@ describe('target semantics', () => {
     const { service, fake } = await fixture({ existing: ['chosen'], target: 'chosen' })
     await service.deliver({ message: 'hello' })
     assert.ok(!fake.calls.some(call => call[0] === 'selectModel'))
+  })
+})
+
+describe('folded delivery', () => {
+  it('delivers through the agent channel with a miloco-push source', async () => {
+    const { service, fake, flushed } = await fixture({
+      existing: ['s1'],
+      target: 's1',
+      agentFollowup: true,
+    })
+    const result = await service.deliver({ message: '厨房灯已打开', title: '客厅灯' })
+    assert.equal(result.sessionId, 's1')
+    assert.equal(result.folded, true)
+
+    const followup = fake.followups.at(-1)
+    assert.ok(followup)
+    assert.equal(followup.sessionId, 's1')
+    assert.equal(followup.message.role, 'user')
+    assert.equal(followup.message.content[0].text, '厨房灯已打开')
+    assert.equal(followup.message.source.kind, 'miloco-push')
+    assert.equal(followup.message.source.form, 'notice')
+    assert.equal(followup.message.source.summary, '客厅灯')
+    assert.ok(followup.message.id)
+
+    // The folded channel replaces the ordinary prompt path.
+    assert.ok(!fake.calls.some(call => call[0] === 'prompt'))
+    assert.equal(flushed.length, 1)
+  })
+
+  it('summarises the first body line when the push has no title', async () => {
+    const { service, fake } = await fixture({
+      existing: ['s1'],
+      target: 's1',
+      agentFollowup: true,
+    })
+    await service.deliver({ message: '有人按了门铃\n门口摄像头' })
+    const followup = fake.followups.at(-1)
+    assert.equal(followup.message.source.summary, '有人按了门铃')
+  })
+
+  it('truncates a long summary to 120 characters', async () => {
+    const { service, fake } = await fixture({
+      existing: ['s1'],
+      target: 's1',
+      agentFollowup: true,
+    })
+    await service.deliver({ message: 'x'.repeat(400) })
+    const followup = fake.followups.at(-1)
+    assert.equal(followup.message.source.summary.length, 120)
+  })
+
+  it('falls back to the ordinary prompt when the agent cannot be resolved', async () => {
+    const { service, fake } = await fixture({
+      existing: ['s1'],
+      target: 's1',
+      agentError: true,
+    })
+    const result = await service.deliver({ message: 'hello' })
+    assert.equal(result.folded, false)
+    assert.ok(fake.calls.some(call => call[0] === 'prompt'))
+    assert.equal(fake.followups.length, 0)
+  })
+
+  it('falls back to the ordinary prompt when the host has no agent channel', async () => {
+    const { service, fake } = await fixture({
+      existing: ['s1'],
+      target: 's1',
+    })
+    const result = await service.deliver({ message: 'hello' })
+    assert.equal(result.folded, false)
+    assert.ok(fake.calls.some(call => call[0] === 'prompt'))
+  })
+
+  it('delivers into the household workspace directory', async () => {
+    const homeDir = join(workdir, 'home-workspace')
+    const { service, fake } = await fixture({
+      existing: [],
+      target: 'missing',
+      agentFollowup: true,
+      home: { dir: homeDir, ensure: async () => ({ path: homeDir, workspaceId: 'ws', title: 't', agentPreset: 'miloco' }) },
+    })
+    await service.deliver({ message: 'hello' })
+    const created = fake.requests.find(request => request.sessionId !== undefined)
+    // A session created for a push works in the household workspace directory.
+    assert.equal(created?.cwd, homeDir)
   })
 })
 

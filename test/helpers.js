@@ -90,7 +90,10 @@ export async function invoke(handler, options = {}) {
 
 /**
  * Build a fake session controller.
- * @param {{existing?: string[], waitForResult?: boolean}} [options] - Options.
+ * @param {{existing?: string[], waitForResult?: boolean, agentFollowup?: boolean, agentError?: boolean}} [options] - Options.
+ *   `agentFollowup` gives every existing session an Agent with a `followup`
+ *   method (the folded delivery channel); `agentError` makes `resolveAgent`
+ *   report an error instead.
  * @returns {any} The fake controller and call log.
  */
 export function createFakeSessionController(options = {}) {
@@ -98,10 +101,14 @@ export function createFakeSessionController(options = {}) {
   const calls = []
   const listeners = new Set()
   let promptBehavior = null
+  const followups = []
+  /** @type {any[]} */
+  const requests = []
 
   const controller = {
     calls,
     existing,
+    followups,
     onPrompt(behavior) {
       promptBehavior = behavior
     },
@@ -110,11 +117,24 @@ export function createFakeSessionController(options = {}) {
     },
     async resolveAgent(sessionId) {
       calls.push(['resolveAgent', sessionId])
-      if (existing.has(sessionId)) return { agent: { session: { header: { id: sessionId } } } }
+      if (options.agentError) {
+        return { error: Object.assign(new Error(`session "${sessionId}" not found`), { code: 'session/not-found' }) }
+      }
+      if (existing.has(sessionId)) {
+        const agent = { session: { header: { id: sessionId } } }
+        if (options.agentFollowup) {
+          agent.followup = (message) => {
+            followups.push({ sessionId, message })
+            calls.push(['followup', sessionId, message])
+          }
+        }
+        return { agent }
+      }
       return { error: Object.assign(new Error(`session "${sessionId}" not found`), { code: 'session/not-found' }) }
     },
     async create(request) {
       calls.push(['create', request.sessionId, request.agentPreset])
+      requests.push(request)
       existing.add(request.sessionId)
       return { sessionId: request.sessionId }
     },
@@ -132,6 +152,8 @@ export function createFakeSessionController(options = {}) {
   return {
     controller,
     calls,
+    followups,
+    requests,
     on(_name, listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
