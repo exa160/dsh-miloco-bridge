@@ -79,13 +79,16 @@ adapter/dsh_adapter.py  Miloco 侧 agent_platform adapter
 
 ## 4. 家庭工作区与概览
 
-`home.js` 维护唯一一个家庭工作区：「Miloco 家庭助手」预设的所有会话都在这个目录里。
+`home.js` 维护一个家庭工作区：概览页「新建家庭会话」建出的会话、以及推送创建/复用的
+归档会话，工作目录都是它。会话本身仍可带自己的 cwd——例如手动把「Miloco 家庭助手」
+预设挂到别的工作区的会话上，那个会话保留自己的 workspace cwd，不会迁到这里。
 
 - 目录解析顺序：`overlay.home.dir` → 静态 `workspace.dir` →
   `$DSH_HOME/plugin-data/dsh-miloco-bridge/home`；
 - 启动时创建目录、注册为宿主 Workspace、改名为 `workspace.title`（默认「家庭助手」），
   每次 `ensure()` 都会重新置顶，避免被后建的工作区挤到下面；
-- 设置页“修改目录”只写 overlay，随后重新注册工作区，不需要重启 DSH；
+- 设置页“修改目录”写 overlay 后**注册一个新的工作区**；旧目录的工作区注册
+  **不会**被移除，旧目录与其中的会话都不受影响（与设置页同一段文案）；
 - 宿主没有 `workspaceRegistry` 时只建目录，`workspaceId` 为空，不报错。
 
 概览页（侧栏「Miloco 家庭助手」）读 `GET /home/overview`：后端状态与版本、设备与房间分组、

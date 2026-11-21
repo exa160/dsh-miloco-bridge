@@ -318,7 +318,7 @@ rm -rf "$MILOCO_HOME/agent_platform/dsh"
 | webhook 503 | 推送令牌为空（fail closed）；在 WebUI 连接时填 `pushToken` |
 | webhook 401 | DSH 与 Miloco 的令牌不一致 |
 | 普通会话也有 miloco 工具 | 预设未生效；检查 `preset-miloco.plugins` |
-| 推送落到了错误会话 | 清空 `target.sessionId` 用“上一次触发”，或显式选择会话 |
+| 推送落到了错误会话 | 默认 `archive` 模式下 `target.sessionId` 被忽略，所有推送都进归档会话 `miloco-archive`。要改投递目标，先在设置页「推送目标 → 投递方式」改为「指定会话」（`session`），再清空 `target.sessionId`（= 上一次触发 Miloco 的会话）或填入目标会话 id |
 | 模型没跟随对话 | 检查 overlay 里是否残留 provider/model |
 | `~` 路径读不到 | 升级到包含 `lib/paths.js` 的版本；路径会按 `$DSH_HOME` 展开 |
 | Miloco 首页 404、但 `/api/*` 仍响应 | 后端进程可能还挂在旧源码路径（静态目录随源码移动而失效）。用 `supervisorctl reread/update` 重载配置后重启；若报 `No module named miloco`，检查 venv 的 editable `.pth` 是否仍指向旧路径 |

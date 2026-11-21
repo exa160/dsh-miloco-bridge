@@ -23,7 +23,7 @@ python3 -m py_compile adapter/dsh_adapter.py
 
 - 连接/overlay/state 的路径与权限（`0600`）；
 - 只读 30 工具、管家 56 工具；
-- 推送目标：上次会话 / 显式会话 / 派生会话 / 模型留空不调 `selectModel`；
+- 推送目标：归档会话（默认）/ 上次会话 / 显式会话 / 派生会话 / 模型留空不调 `selectModel`；
 - 感知过滤：结构化 urgency、文本“事件优先级”、批量取最高、ignore、阈值比较；
 - webhook：无令牌 503、错令牌 401、正确令牌通过、幂等、turn 等待；
 - 设置 API：概览、会话列表、`/target`、`/connect`、`/mode`、`/uninstall`；
@@ -165,15 +165,23 @@ schema（required、additionalProperties、enum）。所有 HTTP 工具的路径
 
 ### 4.1 目标语义
 
+投递方式由 `push.target.mode` 决定，默认是 `archive`：
+
 | 配置 | 预期 |
 |---|---|
-| `target.sessionId=""`，最近调用过 `miloco_*` 工具 | 投到该会话 |
-| `target.sessionId=""`，没有记录 | 投到 `miloco-agent-main-miloco`（按 `sessionKey` 派生） |
-| `target.sessionId="<id>"` | 投到该会话；不存在则创建并挂 `miloco` 预设 |
+| `target.mode="archive"`（默认，省略即此值） | 所有推送进归档会话 `miloco-archive`；首次推送时懒创建，工作目录 = 家庭工作区，挂 `miloco` 预设，标题「Miloco 推送归档」，之后一直复用；`target.sessionId` 被忽略 |
+| `target.mode="session"`，`target.sessionId=""`，最近调用过 `miloco_*` 工具 | 投到该会话 |
+| `target.mode="session"`，`target.sessionId=""`，没有记录 | 投到 `miloco-agent-main-miloco`（按 `sessionKey` 派生） |
+| `target.mode="session"`，`target.sessionId="<id>"` | 投到该会话；不存在则创建并挂 `miloco` 预设 |
 | `model` 空 | 不调用 `selectModel`，跟随会话 |
 | `provider+model` | 对目标会话调用 `selectModel` |
 
-离线测试已覆盖全部五种情况；真实环境可用下面的 curl 检查（`message` 为空不会触发 LLM）：
+`archive` 下 `target.sessionId` 不参与解析：想按会话投递，要先把投递方式改为
+「指定会话」（`target.mode: "session"`），配置的会话 → 上次触发 Miloco 的会话 →
+`sessionKey` 派生这条回退链才会重新生效。
+
+离线测试已覆盖上表全部分支；真实环境可用下面的 curl 检查（`message` 为空不会触发 LLM）。
+下面的请求不带 `mode`，所以按默认落进归档会话 `miloco-archive`：
 
 ```bash
 curl -s -X POST http://127.0.0.1:3086/miloco/webhook \
@@ -191,7 +199,9 @@ miloco-cli config get agent.webhook_url
 # http://<dsh-host>:3080/miloco/webhook
 ```
 
-在 Miloco 面板触发一次规则或任务，DSH 日志应出现：
+在 Miloco 面板触发一次规则或任务：默认 `archive` 模式下，推送以折叠卡片出现在
+「Miloco 推送归档」（`miloco-archive`）会话里，概览页的推送记录也会多一条。
+DSH 日志应出现：
 
 ```text
 dsh-miloco-bridge: push delivery failed ...   # 仅在失败时
@@ -237,6 +247,9 @@ DSH_HOME=/tmp/dsh-miloco-bundle-verify \
 
 ## 7. 已知边界
 
+- 默认 `archive` 模式下所有推送共用同一个归档会话：前一次 turn 未结束时又来的推送会挤在同一会话里，
+  等待结果的调用可能报 `status: "timeout"`，回复也可能归到另一次推送；需要按次对齐时改用
+  「指定会话」（`session`），或把连发的推送拉开间隔（详见 [ARCHITECTURE.md](ARCHITECTURE.md) 的 7.6）。
 - 隔离 profile 没有模型 API Key，因此没有在真实 UI 里跑完整 LLM turn；
   推送 turn 的等待/回复逻辑由离线测试覆盖。
 - 一键部署会运行上游安装器，耗时取决于网络与 Python 依赖；本次未在干净机器上从零跑完整安装。
