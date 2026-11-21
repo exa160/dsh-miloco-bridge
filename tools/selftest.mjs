@@ -120,7 +120,11 @@ await check('skills', async () => {
 
 await check('client bundle', async () => {
   const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
-  assert.ok(source.includes('settings.plugins.tab'))
+  // The settings half opens from the 「Miloco 家庭助手」 page, not from a
+  // 「设置 → 插件」 tab.
+  assert.ok(source.includes('sidebar.panellist'))
+  assert.ok(source.includes('dsh-miloco-dash-config'))
+  assert.ok(!source.includes('settings.plugins.tab'))
   assert.ok(source.includes('/dsh-miloco-bridge/api'))
   assert.ok(!source.includes('默认模型'))
 })

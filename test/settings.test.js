@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
 
-import { registerSettingsApi, SETTINGS_PREFIX } from '../lib/settings-api.js'
+import { registerSettingsApi, SETTINGS_PREFIX, normalizeEvents } from '../lib/settings-api.js'
 import { createHomeService } from '../lib/home.js'
 import { createMilocoClient } from '../lib/miloco-client.js'
 import { createOverlay } from '../lib/overlay.js'
@@ -117,6 +117,12 @@ async function fixture(options = {}) {
           },
           list() { return registryItems },
           async insertBefore() {},
+          async delete(id) {
+            const index = registryItems.findIndex(item => item.id === id)
+            if (index < 0) return false
+            registryItems.splice(index, 1)
+            return true
+          },
         }
       },
     },
@@ -196,6 +202,19 @@ describe('settings API', () => {
     assert.equal((await overlay.current()).home.dir, '')
   })
 
+  it('home route toggles the pinned workspace through the overlay', async () => {
+    const { routes, overlay } = await fixture()
+    const off = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { enabled: false } })
+    assert.equal(off.status, 200)
+    assert.equal(off.body.enabled, false)
+    assert.equal((await overlay.current()).workspace.enabled, false)
+
+    const on = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { enabled: true } })
+    assert.equal(on.status, 200)
+    assert.equal(on.body.enabled, true)
+    assert.equal((await overlay.current()).workspace.enabled, true)
+  })
+
   it('home route rejects a relative directory', async () => {
     const { routes } = await fixture()
     const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { dir: 'relative/home' } })
@@ -212,7 +231,25 @@ describe('settings API', () => {
           { did: 'd3', name: '门锁', online: true, room_name: '', model: 'm3' },
         ],
       },
-      '/api/events': { code: 0, data: [{ type: 'motion', source: 'cam1', timestamp: 1 }] },
+      '/api/events': {
+        code: 0,
+        data: {
+          events: [
+            {
+              event_id: 'e1',
+              timestamp: 1795275853453,
+              text: '[感知引擎]事件提醒：\n时间：23:43:59\n来源：客厅的小米智能摄像机2 云台版(did=1039147995)\n画面描述：客厅光线偏暗\n检测到：客厅沙发及置物架上堆放包袋、纸盒等杂物\n事件优先级：low\n建议：建议整理归位',
+              device_ids: ['1039147995'],
+            },
+            {
+              event_id: 'e0',
+              timestamp: 1795265170214,
+              text: '[感知引擎]事件提醒：\n来源：阳台摄像头\n检测到：玻璃门敞开\n事件优先级：high',
+              device_ids: ['7'],
+            },
+          ],
+        },
+      },
     })
     try {
       const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
@@ -225,7 +262,13 @@ describe('settings API', () => {
       assert.equal(response.body.devices.online, 2)
       assert.equal(response.body.devices.rooms.find(room => room.name === '客厅').total, 2)
       assert.equal(response.body.devices.rooms.find(room => room.name === '未分组').total, 1)
-      assert.equal(response.body.events.items[0].type, 'motion')
+      assert.equal(response.body.events.items.length, 2)
+      assert.equal(response.body.events.items[0].kind, '感知事件')
+      assert.equal(response.body.events.items[0].source, '客厅的小米智能摄像机2 云台版(did=1039147995)')
+      assert.equal(response.body.events.items[0].summary, '客厅沙发及置物架上堆放包袋、纸盒等杂物')
+      assert.equal(response.body.events.items[0].priority, 'low')
+      assert.equal(response.body.events.items[0].timestamp, 1795275853453)
+      assert.equal(response.body.events.items[1].priority, 'high')
       assert.deepEqual(response.body.pushes.items, [])
       assert.equal(response.body.version.current, '2026.10.16')
       assert.equal(response.body.push.path, '/miloco/webhook')
@@ -490,5 +533,36 @@ describe('settings API', () => {
     assert.equal(ok.status, 200)
     assert.equal(ok.body.note, 'uninstalled')
     assert.deepEqual(uninstallCalls.at(-1), { confirm: 'UNINSTALL', removeData: true, removeSource: true })
+  })
+})
+
+describe('normalizeEvents', () => {
+  it('accepts the {events:[...]} envelope and legacy arrays', () => {
+    assert.deepEqual(normalizeEvents(null), [])
+    assert.deepEqual(normalizeEvents({}), [])
+    assert.equal(normalizeEvents({ events: [{ text: 'x' }] }).length, 1)
+    assert.equal(normalizeEvents([{ type: 'motion', source: 'cam', timestamp: 1 }]).length, 1)
+  })
+
+  it('parses perception text into structured fields', () => {
+    const [item] = normalizeEvents({ events: [{
+      timestamp: 1795275853,
+      text: '[感知引擎]事件提醒：\n时间：23:43:59\n来源：客厅摄像头(did=1)\n检测到：沙发有杂物\n事件优先级：low',
+      device_ids: ['1'],
+    }] })
+    assert.equal(item.kind, '感知事件')
+    assert.equal(item.source, '客厅摄像头(did=1)')
+    assert.equal(item.summary, '沙发有杂物')
+    assert.equal(item.priority, 'low')
+    assert.equal(item.timestamp, 1795275853000)
+  })
+
+  it('falls back to device ids and sorts newest first, capped at 10', () => {
+    const rows = Array.from({ length: 13 }, (_, i) => ({ timestamp: i, device_ids: [`d${i}`], text: 'plain line' }))
+    const items = normalizeEvents({ events: rows })
+    assert.equal(items.length, 10)
+    assert.equal(items[0].source, 'd12')
+    assert.equal(items[0].summary, 'plain line')
+    assert.equal(items[0].priority, '')
   })
 })

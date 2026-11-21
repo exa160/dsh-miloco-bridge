@@ -11,9 +11,9 @@
 
 ## 截图
 
-| Agent 预设 | Miloco 配置页 |
-|---|---|
-| ![Agent 预设](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/agent-presets.png) | ![Miloco 配置页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-settings.png) |
+| Agent 预设 | 家庭概览页 | Miloco 配置 |
+|---|---|---|
+| ![Agent 预设](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/agent-presets.png) | ![家庭概览页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-overview.png) | ![Miloco 配置](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-settings.png) |
 
 > 截图使用演示数据；真实账号、内网地址与 token 用量已脱敏。
 
@@ -23,13 +23,15 @@
   普通对话看不到 `miloco_*` 工具，也不会被注入 Miloco 技能。
 - **完整能力**：设备、场景、感知、规则、任务、身份、宠物、家庭档案、通知、token 用量。
 - **推送闭环**：Miloco 的感知事件、规则触发、任务到期可以主动推送到 DSH 会话。
-- **家庭概览**：侧栏「Miloco 家庭助手」打开设备/房间、最近事件、推送记录与连接状态；
-  家庭工作区默认置顶，可在设置页修改目录。
-- **推送归档**：推送默认进入专用归档会话 `miloco-archive`，也可在设置页改为任意指定会话；
+- **家庭概览**：侧栏「Miloco 家庭助手」打开家庭概览（账号、设备、摄像头、规则/任务、
+  感知与 token 用量）、设备/房间、最近事件、推送记录与连接状态。
+- **家庭工作区**：家庭工作区默认置顶显示，可在配置里修改目录、被误删后 30 秒内自动恢复；
+  关闭「启用置顶工作区」后不再注册工作区，其中的会话归到「未分组」。
+- **推送归档**：推送默认进入专用归档会话 `miloco-archive`，也可在配置里改为任意指定会话；
   会话内以折叠卡片展示，结构与 DSH 自动化任务触发卡片一致。
 - **感知过滤**：按 `low / medium / high` 事件优先级过滤，低于阈值的感知建议不产生 DSH turn。
-- **可视化配置**：账号/设备/token 概览、推送目标、感知等级、运行模式、连接与卸载都在
-  「设置 → 插件 → Miloco」里完成。
+- **可视化配置**：家庭工作区目录、推送目标、感知等级、运行模式、连接与卸载，
+  都在侧栏「Miloco 家庭助手」页面点「配置」完成。
 - **可独立安装**：没有 Miloco 也能装插件；之后可在 UI 一键部署或连接已有实例。
 
 ## 安装
@@ -71,14 +73,11 @@ systemctl --user restart dsh-web.service
 
 ## 快速开始
 
-1. 打开 DSH WebUI →「设置 → 插件 → Miloco」。
+1. 打开 DSH WebUI → 侧栏「Miloco 家庭助手」→ 右上角「配置」。
 2. 没有 Miloco：点「一键部署 Miloco」；已有实例：点「连接已有的 Miloco」。
-3. 新建会话时选择 **「Miloco 家庭助手」**。
-4. 在设置页选择运行模式（只读 / 管家）、推送会话、可选模型与感知等级。
+3. 新建会话时选择 **「Miloco 家庭助手」**，或用概览页的「新建家庭会话」。
+4. 在配置弹窗里选择运行模式（只读 / 管家）、推送会话、可选模型与感知等级，并可修改家庭工作区目录。
 5. 想收 Miloco 主动推送时，确认 Miloco 的 `agent.platform=dsh`，并使用同一枚 Bearer token。
-
-> 原生工作区行的「新建会话」不会自动挂 `miloco` 预设；需要米家工具时请用概览页的
-> 「新建家庭会话」，或选择「Miloco 家庭助手」预设。
 
 ## 权限与风险
 
@@ -90,7 +89,7 @@ systemctl --user restart dsh-web.service
 
 ## 兼容性
 
-- DSH：`0.2.1-rc.4` 实测通过；建议 `>= 0.2.1-rc.4`。
+- DSH：`0.2.2-rc.5` 实测通过；建议 `>= 0.2.2-rc.5`。
 - Node.js：`>= 22`。
 - Miloco：2.0 HTTP API（`/api/*`，`/api/admin/status`、`/api/perception/*` 等）。
 - 平台：Linux / macOS；Web profile（`dsh --profile web`）。

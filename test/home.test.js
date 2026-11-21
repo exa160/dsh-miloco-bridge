@@ -62,6 +62,13 @@ function fakeCtx(options = {}) {
         async insertBefore(id, beforeId) {
           calls.push(['insertBefore', id, beforeId])
         },
+        async delete(id) {
+          calls.push(['delete', id])
+          const index = items.findIndex(item => item.id === id)
+          if (index < 0) return false
+          items.splice(index, 1)
+          return true
+        },
       }
     },
   }
@@ -173,6 +180,46 @@ describe('home service', () => {
     assert.equal(state.enabled, false)
     assert.equal(state.workspaceId, '')
     assert.ok(!calls.some(call => call[0] === 'create'))
+  })
+
+  it('drops the registration when the switch is turned off at runtime', async () => {
+    const dir = join(workdir, 'home-toggle-off')
+    const { ctx, calls, items } = fakeCtx()
+    const overlay = {
+      state: { home: { dir }, workspace: { enabled: true } },
+      current: async () => overlay.state,
+      write: async (value) => {
+        overlay.state = { ...overlay.state, ...value }
+      },
+    }
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, overlay, logger: ctx.logger })
+    const first = await home.ensure()
+    assert.ok(first.workspaceId)
+
+    const state = await home.setEnabled(false)
+    assert.equal(state.enabled, false)
+    assert.equal(state.workspaceId, '')
+    assert.deepEqual(calls.find(call => call[0] === 'delete'), ['delete', first.workspaceId])
+    assert.ok(!items.some(item => item.id === first.workspaceId))
+  })
+
+  it('registers the workspace again when the switch is turned back on', async () => {
+    const dir = join(workdir, 'home-toggle-on')
+    const { ctx, calls } = fakeCtx()
+    const overlay = {
+      state: { home: { dir }, workspace: { enabled: true } },
+      current: async () => overlay.state,
+      write: async (value) => {
+        overlay.state = { ...overlay.state, ...value }
+      },
+    }
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, overlay, logger: ctx.logger })
+    await home.ensure()
+    await home.setEnabled(false)
+    const state = await home.setEnabled(true)
+    assert.equal(state.enabled, true)
+    assert.ok(state.workspaceId)
+    assert.equal(calls.filter(call => call[0] === 'create').length, 2)
   })
 
   it('re-attaches sessions whose cwd is the household directory', async () => {

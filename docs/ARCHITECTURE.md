@@ -89,10 +89,14 @@ adapter/dsh_adapter.py  Miloco 侧 agent_platform adapter
   每次 `ensure()` 都会重新置顶，避免被后建的工作区挤到下面；
 - 设置页“修改目录”写 overlay 后**注册一个新的工作区**；旧目录的工作区注册
   **不会**被移除，旧目录与其中的会话都不受影响（与设置页同一段文案）；
+- 设置页“启用置顶工作区”写 `overlay.workspace.enabled`（默认 `true`）：关闭后
+  `ensure()` 调 `workspaceRegistry.delete()` 注销工作区，其中的会话随之落到「未分组」，
+  重新打开时再注册并置顶；
 - 宿主没有 `workspaceRegistry` 时只建目录，`workspaceId` 为空，不报错。
 
-概览页（侧栏「Miloco 家庭助手」）读 `GET /home/overview`：后端状态与版本、设备与房间分组、
-最近事件、最近推送记录、归档会话是否存在。每个远端接口独立结算，单个接口不可达不会涂黑整页。
+概览页（侧栏「Miloco 家庭助手」）读 `GET /home/overview`：后端状态与版本、家庭概览统计
+（账号、设备、摄像头、规则/任务、感知源、token 用量）、设备与房间分组、最近事件、
+最近推送记录、归档会话是否存在。每个远端接口独立结算，单个接口不可达不会涂黑整页。
 
 ## 5. 设置 API
 
@@ -107,9 +111,9 @@ adapter/dsh_adapter.py  Miloco 侧 agent_platform adapter
 | GET | `/deploy` | 部署状态与日志 |
 | POST | `/deploy` | 启动部署 |
 | POST | `/connect` | 写连接与推送令牌，立即生效 |
-| GET | `/home` | 家庭工作区快照（路径、标题、dirSource、归档会话 id） |
-| POST | `/home` | 修改家庭工作区目录（写 overlay，注册新工作区） |
-| GET | `/home/overview` | 家庭概览聚合（状态、版本、设备、事件、推送记录） |
+| GET | `/home` | 家庭工作区快照（路径、标题、dirSource、归档会话 id、enabled） |
+| POST | `/home` | 修改家庭工作区目录或置顶开关（写 overlay，注册/注销工作区） |
+| GET | `/home/overview` | 家庭概览聚合（状态、版本、概览统计、设备、事件、推送记录） |
 
 写操作要求同源；令牌不会回显给浏览器。
 

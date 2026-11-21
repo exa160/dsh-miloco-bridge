@@ -3,7 +3,7 @@
 ## 0. 前置条件
 
 - Node.js ≥ 22
-- 可用的 DSH（本项目在 `0.2.1-rc.4` 上验证）
+- 可用的 DSH（本项目在 `0.2.2-rc.5` 上验证）
 - 可选：已安装或准备安装 Xiaomi Miloco
 - 可选：`git`、`python3`（一键部署与 adapter 语法检查）
 
@@ -90,7 +90,7 @@ install.sh
 ## 3. 未安装 Miloco：一键部署
 
 1. 安装并重启 DSH；
-2. 打开「设置 → 插件 → Miloco」；
+2. 打开侧栏「Miloco 家庭助手」→ 右上角「配置」；
 3. 点「一键部署 Miloco」；
 4. 面板会实时显示部署日志。流程：
    - 若检测到已安装的 `miloco-cli` 与 `$MILOCO_HOME/config.json`，先尝试 `service start`；
@@ -115,7 +115,7 @@ install.sh
 
 ### 4.1 WebUI
 
-「设置 → 插件 → Miloco」→「连接已有的 Miloco」：
+「Miloco 家庭助手」页面 →「配置」→「连接已有的 Miloco」：
 
 - `baseUrl`：例如 `http://192.0.2.10:1810`
 - `token`：`$MILOCO_HOME/config.json` 的 `server.token`（如果后端未启用鉴权可留空）
@@ -206,7 +206,7 @@ overlay 示例：
 
 ## 6. 运行模式
 
-「设置 → 插件 → Miloco → 运行模式」：
+「Miloco 家庭助手」页面 →「配置」→「Miloco 家庭助手 · 运行模式」：
 
 | 模式 | 工具 |
 |---|---|
@@ -259,7 +259,7 @@ systemctl --user restart dsh-web.service
 
 ### 8.1 卸载 Miloco（保留 DSH 插件）
 
-「设置 → 插件 → Miloco → 运行状态 → 卸载 Miloco」：
+「Miloco 家庭助手」页面 →「配置」→「运行状态 → 卸载 Miloco」：
 
 1. 输入 `UNINSTALL` 确认；
 2. 可选勾选：
