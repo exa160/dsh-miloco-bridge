@@ -13,7 +13,7 @@ after(async () => { await rm(workdir, { recursive: true, force: true }) })
 
 /**
  * Build a fake host context with a workspace registry.
- * @param {{registry?: boolean, failing?: boolean}} [options] - Fixture options.
+ * @param {{registry?: boolean, failing?: boolean, listFails?: boolean}} [options] - Fixture options.
  * @returns {any} The fake context, registry call log and registry items.
  */
 function fakeCtx(options = {}) {
@@ -44,7 +44,10 @@ function fakeCtx(options = {}) {
           items.push(workspace)
           return workspace
         },
-        list() { return items },
+        list() {
+          if (options.listFails) throw new Error('list down')
+          return items
+        },
         async insertBefore(id, beforeId) {
           calls.push(['insertBefore', id, beforeId])
         },
@@ -162,6 +165,24 @@ describe('home service', () => {
     assert.deepEqual(calls.find(call => call[0] === 'insertBefore'), ['insertBefore', 'ws-2', 'ws-other'])
   })
 
+  it('re-pins the household workspace when another workspace moves ahead', async () => {
+    const dir = join(workdir, 'home-3b')
+    const { ctx, items, calls } = fakeCtx()
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
+    const state = await home.ensure()
+    assert.ok(state.workspaceId)
+    // Nothing to pin while the household workspace is alone.
+    assert.equal(calls.some(call => call[0] === 'insertBefore'), false)
+
+    items.unshift({ id: 'ws-other', path: '/tmp/other-3b', title: '工作' })
+    await home.ensure()
+
+    assert.deepEqual(
+      calls.filter(call => call[0] === 'insertBefore'),
+      [['insertBefore', state.workspaceId, 'ws-other']],
+    )
+  })
+
   it('falls back to the defaults when the host has no workspace registry', async () => {
     const dir = join(workdir, 'home-4')
     const { ctx } = fakeCtx({ registry: false })
@@ -180,6 +201,18 @@ describe('home service', () => {
     const state = await home.ensure()
     assert.equal(state.workspaceId, '')
     assert.ok(calls.some(call => call[0] === 'warn'))
+  })
+
+  it('warns instead of rejecting when the registry list throws', async () => {
+    const dir = join(workdir, 'home-5b')
+    const { ctx, calls } = fakeCtx({ listFails: true })
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
+    const state = await home.ensure()
+    assert.ok(state.workspaceId)
+    assert.ok(
+      calls.some(call => call[0] === 'warn' && String(call[1]).includes('读取工作区列表失败')),
+      'expected a warn about the failing list()',
+    )
   })
 
   it('setDir writes the overlay and registers the new directory', async () => {
