@@ -32,6 +32,8 @@
         workspace:
           # 空 = $DSH_HOME/plugin-data/dsh-miloco-bridge/home
           dir: ""
+          # false = 不再注册/自愈家庭工作区；用于有意移除（卸载插件亦可）。
+          enabled: true
           title: "家庭助手"
           agentPreset: "miloco"
         # 留空 = $DSH_HOME/miloco-plugin.json / $DSH_HOME/miloco-plugin.state.json

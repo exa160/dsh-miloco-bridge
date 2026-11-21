@@ -43,6 +43,7 @@ describe('configuration', () => {
     const defaults = infra.normalizeConfig({})
     assert.equal(defaults.workspace.dir, '')
     assert.equal(defaults.workspace.title, '家庭助手')
+    assert.equal(defaults.workspace.enabled, true)
     assert.equal(defaults.workspace.agentPreset, 'miloco')
     assert.equal(defaults.push.target.mode, 'archive')
     // `home` stays the Miloco backend install directory.
@@ -326,9 +327,13 @@ describe('client bundle', () => {
     execFileSync(process.execPath, ['--check', join(ROOT, 'lib/client.js')], { stdio: 'pipe' })
   })
 
-  it('registers the settings tab and never offers a default-model pseudo entry', async () => {
+  it('keeps configuration in the dashboard and never offers a default-model pseudo entry', async () => {
     const source = await readFile(join(ROOT, 'lib/client.js'), 'utf8')
-    assert.ok(source.includes('settings.plugins.tab'))
+    assert.ok(!source.includes("ctx.slots.inject('settings.plugins.tab'"))
+    assert.ok(source.includes('dsh-miloco-dash-config'))
+    assert.ok(source.includes('Miloco 配置'))
+    assert.ok(source.includes("}, '配置')"))
+    assert.ok(!source.includes('dsh-miloco-dash-sub'))
     assert.ok(source.includes("'/dsh-miloco-bridge/api'"))
     assert.ok(source.includes('跟随对话') || source.includes('跟随该对话'))
     assert.ok(!source.includes('默认模型'))

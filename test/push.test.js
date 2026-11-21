@@ -168,7 +168,7 @@ describe('folded delivery', () => {
     assert.equal(followup.message.content[0].text, '厨房灯已打开')
     assert.equal(followup.message.source.kind, 'miloco-push')
     assert.equal(followup.message.source.form, 'notice')
-    assert.equal(followup.message.source.summary, '客厅灯')
+    assert.equal(followup.message.source.summary, '事件推送-客厅灯')
     assert.ok(followup.message.id)
 
     // The folded channel replaces the ordinary prompt path.
@@ -184,7 +184,20 @@ describe('folded delivery', () => {
     })
     await service.deliver({ message: '有人按了门铃\n门口摄像头' })
     const followup = fake.followups.at(-1)
-    assert.equal(followup.message.source.summary, '有人按了门铃')
+    assert.equal(followup.message.source.summary, '事件推送-有人按了门铃')
+  })
+
+  it('labels cron pushes as task pushes and strips the cron tag', async () => {
+    const { service, fake } = await fixture({
+      existing: ['s1'],
+      target: 's1',
+      agentFollowup: true,
+    })
+    await service.deliver({
+      message: '[cron:灯光无人自动关闭巡检] 【每2小时·灯光无人自动关闭巡检】目标：无人时关闭主要灯光',
+    })
+    const followup = fake.followups.at(-1)
+    assert.equal(followup.message.source.summary, '任务推送-灯光无人自动关闭巡检')
   })
 
   it('truncates a long summary to 120 characters', async () => {

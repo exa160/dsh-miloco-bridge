@@ -19,12 +19,14 @@ after(async () => { await rm(workdir, { recursive: true, force: true }) })
 function fakeCtx(options = {}) {
   const calls = []
   const items = []
+  const attached = []
   const ctx = {
     logger: {
       info() {},
       warn(message) { calls.push(['warn', message]) },
     },
     get(name) {
+      if (name === 'sessions') return { list: () => options.sessions ?? [] }
       if (name !== 'workspaceRegistry' || options.registry === false) return undefined
       return {
         async create(path, title) {
@@ -36,13 +38,22 @@ function fakeCtx(options = {}) {
             id: `ws-${items.length + 1}`,
             path,
             title,
+            sessionIds: [],
             async setTitle(next) {
               calls.push(['setTitle', this.id, next])
               this.title = next
             },
+            async attachSession(sessionId) {
+              calls.push(['attachSession', this.id, sessionId])
+              this.sessionIds.push(sessionId)
+              attached.push(sessionId)
+            },
           }
           items.push(workspace)
           return workspace
+        },
+        get(id) {
+          return items.find(item => item.id === id)
         },
         list() {
           if (options.listFails) throw new Error('list down')
@@ -54,7 +65,7 @@ function fakeCtx(options = {}) {
       }
     },
   }
-  return { ctx, calls, items }
+  return { ctx, calls, items, attached }
 }
 
 describe('resolveMilocoHomeDir', () => {
@@ -148,6 +159,33 @@ describe('home service', () => {
     assert.equal(second.workspaceId, 'ws-2')
     assert.equal(calls.filter(call => call[0] === 'create').length, 2)
     assert.ok(items.some(item => item.id === second.workspaceId && item.path === dir))
+  })
+
+  it('does not register when workspace.enabled is false', async () => {
+    const dir = join(workdir, 'home-disabled')
+    const { ctx, calls } = fakeCtx()
+    const home = createHomeService({
+      ctx,
+      config: { workspace: { dir, enabled: false } },
+      logger: ctx.logger,
+    })
+    const state = await home.ensure()
+    assert.equal(state.enabled, false)
+    assert.equal(state.workspaceId, '')
+    assert.ok(!calls.some(call => call[0] === 'create'))
+  })
+
+  it('re-attaches sessions whose cwd is the household directory', async () => {
+    const dir = join(workdir, 'home-members')
+    const { ctx, attached } = fakeCtx({
+      sessions: [
+        { id: 's-home', header: { cwd: dir } },
+        { id: 's-other', header: { cwd: '/tmp/elsewhere' } },
+      ],
+    })
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
+    await home.ensure()
+    assert.deepEqual(attached, ['s-home'])
   })
 
   it('applies the configured title to an existing workspace', async () => {
