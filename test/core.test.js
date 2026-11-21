@@ -82,7 +82,9 @@ describe('configuration', () => {
     assert.equal(value.push.token, 'p')
     assert.equal(value.push.target.sessionId, 's1')
     assert.equal(value.push.model.provider, 'p1')
-    assert.equal('mode' in value.push.target, false)
+    // 顶层的 push.mode 不是合法字段，被丢弃；目标模式只认 push.target.mode
+    assert.equal('mode' in value.push, false)
+    assert.equal(value.push.target.mode, '')
   })
 
   it('overlay writes atomically with mode 0600', async () => {
