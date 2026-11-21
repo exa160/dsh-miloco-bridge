@@ -12,27 +12,46 @@ before(async () => { workdir = await mkdtemp(join(tmpdir(), 'dsh-miloco-home-'))
 after(async () => { await rm(workdir, { recursive: true, force: true }) })
 
 /**
- * Build a fake host context with an optional workspace registry.
- * @param {{registry?: boolean}} [options] - Fixture options.
- * @returns {any} The fake context and the registry call log.
+ * Build a fake host context with a workspace registry.
+ * @param {{registry?: boolean, failing?: boolean}} [options] - Fixture options.
+ * @returns {any} The fake context, registry call log and registry items.
  */
 function fakeCtx(options = {}) {
-  const registryCalls = []
+  const calls = []
+  const items = []
   const ctx = {
-    logger: { info() {}, warn() {} },
+    logger: {
+      info() {},
+      warn(message) { calls.push(['warn', message]) },
+    },
     get(name) {
-      if (name === 'workspaceRegistry' && options.registry !== false) {
-        return {
-          async create(path, title) {
-            registryCalls.push([path, title])
-            return { id: `ws-${registryCalls.length}`, path, title }
-          },
-        }
+      if (name !== 'workspaceRegistry' || options.registry === false) return undefined
+      return {
+        async create(path, title) {
+          calls.push(['create', path, title])
+          if (options.failing) throw new Error('registry down')
+          const found = items.find(item => item.path === path)
+          if (found) return found
+          const workspace = {
+            id: `ws-${items.length + 1}`,
+            path,
+            title,
+            async setTitle(next) {
+              calls.push(['setTitle', this.id, next])
+              this.title = next
+            },
+          }
+          items.push(workspace)
+          return workspace
+        },
+        list() { return items },
+        async insertBefore(id, beforeId) {
+          calls.push(['insertBefore', id, beforeId])
+        },
       }
-      return undefined
     },
   }
-  return { ctx, registryCalls }
+  return { ctx, calls, items }
 }
 
 describe('resolveMilocoHomeDir', () => {
@@ -67,38 +86,84 @@ describe('resolveMilocoHomeDir', () => {
 describe('home service', () => {
   it('creates the directory and registers the workspace', async () => {
     const dir = join(workdir, 'home-1')
-    const { ctx, registryCalls } = fakeCtx()
+    const { ctx, calls } = fakeCtx()
     const home = createHomeService({
       ctx,
       config: { workspace: { dir, title: '家庭助手', agentPreset: 'miloco' } },
       logger: ctx.logger,
     })
     assert.equal(home.dir, dir)
+    assert.equal(home.dirSource, 'config')
     assert.equal(home.title, '家庭助手')
-    assert.equal(home.agentPreset, 'miloco')
     assert.equal(home.workspaceId, '')
 
     const state = await home.ensure()
     assert.equal(state.path, dir)
     assert.equal(state.title, '家庭助手')
-    assert.equal(state.agentPreset, 'miloco')
+    assert.equal(state.dirSource, 'config')
     assert.ok(state.workspaceId)
     assert.ok((await stat(dir)).isDirectory())
-    assert.deepEqual(registryCalls, [[dir, '家庭助手']])
+    assert.deepEqual(calls.filter(call => call[0] === 'create'), [['create', dir, '家庭助手']])
   })
 
-  it('is idempotent', async () => {
+  it('uses the overlay directory over the static config', async () => {
+    const dir = join(workdir, 'home-overlay')
+    const { ctx } = fakeCtx()
+    const home = createHomeService({
+      ctx,
+      config: { workspace: { dir: join(workdir, 'ignored') } },
+      overlay: { current: async () => ({ home: { dir }, push: {} }) },
+      logger: ctx.logger,
+    })
+    const state = await home.ensure()
+    assert.equal(state.path, dir)
+    assert.equal(state.dirSource, 'overlay')
+  })
+
+  it('is idempotent and only retitles a renamed workspace', async () => {
     const dir = join(workdir, 'home-2')
-    const { ctx, registryCalls } = fakeCtx()
+    const { ctx, calls } = fakeCtx()
     const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
     const first = await home.ensure()
     const second = await home.ensure()
     assert.equal(first.workspaceId, second.workspaceId)
-    assert.equal(registryCalls.length, 1)
+    assert.equal(calls.filter(call => call[0] === 'create').length, 1)
+  })
+
+  it('applies the configured title to an existing workspace', async () => {
+    const dir = join(workdir, 'home-2b')
+    const { ctx, items, calls } = fakeCtx()
+    items.push({
+      id: 'ws-old',
+      path: dir,
+      title: '旧标题',
+      async setTitle(next) {
+        calls.push(['setTitle', this.id, next])
+        this.title = next
+      },
+    })
+    const home = createHomeService({
+      ctx,
+      config: { workspace: { dir, title: '家庭助手' } },
+      logger: ctx.logger,
+    })
+    const state = await home.ensure()
+    assert.equal(state.workspaceId, 'ws-old')
+    assert.ok(calls.some(call => call[0] === 'setTitle' && call[2] === '家庭助手'))
+  })
+
+  it('moves the household workspace before the first other workspace', async () => {
+    const dir = join(workdir, 'home-3')
+    const { ctx, items, calls } = fakeCtx()
+    items.push({ id: 'ws-other', path: '/tmp/other', title: '工作' })
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
+    const state = await home.ensure()
+    assert.equal(state.workspaceId, 'ws-2')
+    assert.deepEqual(calls.find(call => call[0] === 'insertBefore'), ['insertBefore', 'ws-2', 'ws-other'])
   })
 
   it('falls back to the defaults when the host has no workspace registry', async () => {
-    const dir = join(workdir, 'home-3')
+    const dir = join(workdir, 'home-4')
     const { ctx } = fakeCtx({ registry: false })
     const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
     const state = await home.ensure()
@@ -109,24 +174,42 @@ describe('home service', () => {
   })
 
   it('survives a failing registry', async () => {
-    const dir = join(workdir, 'home-4')
-    const warnings = []
-    const ctx = {
-      logger: { info() {}, warn(message) { warnings.push(message) } },
-      get() {
-        return {
-          async create() { throw new Error('registry down') },
-        }
-      },
-    }
+    const dir = join(workdir, 'home-5')
+    const { ctx, calls } = fakeCtx({ failing: true })
     const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
     const state = await home.ensure()
     assert.equal(state.workspaceId, '')
-    assert.equal(warnings.length, 1)
+    assert.ok(calls.some(call => call[0] === 'warn'))
+  })
+
+  it('setDir writes the overlay and registers the new directory', async () => {
+    const firstDir = join(workdir, 'home-6')
+    const secondDir = join(workdir, 'home-7')
+    const writes = []
+    const { ctx, calls, items } = fakeCtx()
+    const home = createHomeService({
+      ctx,
+      config: { workspace: { dir: firstDir } },
+      overlay: {
+        current: async () => ({ home: { dir: writes.at(-1)?.home?.dir ?? '' } }),
+        write: async value => { writes.push(value) },
+      },
+      logger: ctx.logger,
+    })
+    const before = await home.ensure()
+    const after = await home.setDir(secondDir)
+    assert.equal(before.path, firstDir)
+    assert.equal(after.path, secondDir)
+    assert.notEqual(before.workspaceId, after.workspaceId)
+    assert.deepEqual(writes.at(-1), { home: { dir: secondDir } })
+    // The old registration is retained, not deleted.
+    assert.equal(items.filter(item => item.path === firstDir).length, 1)
+    assert.equal(items.filter(item => item.path === secondDir).length, 1)
+    assert.ok(!calls.some(call => call[0] === 'delete'))
   })
 
   it('accepts the workspace configuration under a `home` object too', async () => {
-    const dir = join(workdir, 'home-5')
+    const dir = join(workdir, 'home-8')
     const { ctx } = fakeCtx()
     const home = createHomeService({
       ctx,
