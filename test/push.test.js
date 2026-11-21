@@ -42,6 +42,7 @@ async function fixture(options = {}) {
     agentError: options.agentError === true,
   })
   const flushed = []
+  const attachments = []
   const ctx = {
     logger: { info() {}, warn() {} },
     sessionController: fake.controller,
@@ -52,6 +53,15 @@ async function fixture(options = {}) {
     get(name) {
       if (name === 'sessions') {
         return { flush: async session => { flushed.push(session); return true } }
+      }
+      if (name === 'workspaceRegistry') {
+        return {
+          get: id => ({
+            id,
+            sessionIds: attachments,
+            async attachSession(sessionId) { attachments.push(sessionId) },
+          }),
+        }
       }
       return undefined
     },
@@ -82,7 +92,7 @@ async function fixture(options = {}) {
       clear: async () => {},
     },
   })
-  return { service, fake, overlay, state, ctx, flushed }
+  return { service, fake, overlay, state, ctx, flushed, attachments }
 }
 
 describe('target semantics', () => {
@@ -226,13 +236,14 @@ describe('folded delivery', () => {
 })
 
 describe('target modes', () => {
-  it('archive mode creates the dedicated session with the household cwd and preset', async () => {
+  it('archive mode creates the dedicated session in the household workspace', async () => {
     const homeDir = join(workdir, `archive-home-${Math.random().toString(16).slice(2)}`)
-    const { service, fake, state } = await fixture({
+    const { service, fake, state, attachments } = await fixture({
       mode: 'archive',
       home: {
         dir: homeDir,
-        ensure: async () => ({ path: homeDir, workspaceId: 'ws', title: '家庭助手', agentPreset: 'miloco' }),
+        workspaceId: 'ws-home',
+        ensure: async () => ({ path: homeDir, workspaceId: 'ws-home', title: '家庭助手', agentPreset: 'miloco' }),
       },
     })
     const first = await service.deliver({ message: '有人按门铃', title: '门口' })
@@ -241,8 +252,10 @@ describe('target modes', () => {
 
     const created = fake.requests.filter(request => request.sessionId === 'miloco-archive')
     assert.equal(created.length, 1)
-    assert.equal(created[0].cwd, homeDir)
+    assert.equal(created[0].workspaceId, 'ws-home')
+    assert.equal(created[0].cwd, undefined)
     assert.equal(created[0].agentPreset, 'miloco')
+    assert.ok(attachments.includes('miloco-archive'))
     assert.ok(fake.calls.some(call => call[0] === 'rename'
       && call[1] === 'miloco-archive' && call[2] === 'Miloco 推送归档'))
 
@@ -253,6 +266,22 @@ describe('target modes', () => {
     const second = await service.deliver({ message: '第二次' })
     assert.equal(second.sessionId, 'miloco-archive')
     assert.equal(fake.requests.filter(request => request.sessionId === 'miloco-archive').length, 1)
+  })
+
+  it('attaches an existing archive session to the household workspace on startup', async () => {
+    const homeDir = join(workdir, `archive-home-${Math.random().toString(16).slice(2)}`)
+    const { service, attachments } = await fixture({
+      mode: 'archive',
+      existing: ['miloco-archive'],
+      home: {
+        dir: homeDir,
+        workspaceId: 'ws-home',
+        ensure: async () => ({ path: homeDir, workspaceId: 'ws-home', title: '家庭助手', agentPreset: 'miloco' }),
+      },
+    })
+    service.register()
+    await new Promise(resolve => setTimeout(resolve, 50))
+    assert.ok(attachments.includes('miloco-archive'))
   })
 
   it('session mode keeps the last-Miloco fallback', async () => {
