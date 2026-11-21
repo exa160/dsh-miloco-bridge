@@ -70,7 +70,7 @@
 | `miloco_pet_reference_crops` | `pet_id`, `files[]`, `mode?` | 落库参照图；multipart 字段为 `crops` |
 | `miloco_register_preview` | `media_b64?`, `media_b64_list?`, `media_kind?`, `cluster_id?`, `member_id?`, `topk?` | 身份样本预览 |
 | `miloco_register_commit` | `register_session_id_pending`, `indices?`, `member_name?`, `member_role?` | 身份样本落库 |
-| `miloco_push_target_set` | `sessionId?`, `provider?`, `model?`, `reasoningEffort?`, `perceptionLevel?` | 修改推送目标与感知等级 |
+| `miloco_push_target_set` | `mode?`, `sessionId?`, `provider?`, `model?`, `reasoningEffort?`, `perceptionLevel?` | 修改推送目标与感知等级；`mode` = `archive`（默认，忽略 `sessionId`）/ `session` |
 
 ## DSH 侧工具
 

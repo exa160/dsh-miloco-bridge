@@ -178,6 +178,7 @@ describe('settings API', () => {
     const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { dir: next } })
     assert.equal(response.status, 200)
     assert.equal(response.body.previousPath, join(workdir, 'home-workspace'))
+    assert.equal(response.body.archiveSessionId, 'miloco-archive')
     assert.equal(response.body.path, next)
     assert.equal(response.body.dirSource, 'overlay')
     assert.equal((await overlay.current()).home.dir, next)
@@ -266,6 +267,22 @@ describe('settings API', () => {
     assert.deepEqual(response.body.providers[0].models[0].reasoning.efforts.map(item => item.id), ['low', 'high'])
     assert.equal(response.body.push.perception.minLevel, 'all')
     assert.equal(response.body.overlay.push.perception.minLevel, 'all')
+    dispose()
+  })
+
+  it('status reports the effective push target mode and follows a saved override', async () => {
+    const { routes, dispose } = await fixture()
+    const initial = await invoke(routes.get(`${SETTINGS_PREFIX}/status`), { method: 'GET' })
+    assert.equal(initial.status, 200)
+    assert.equal(initial.body.push.target.mode, 'archive')
+
+    const saved = await invoke(routes.get(`${SETTINGS_PREFIX}/target`), {
+      body: { mode: 'session', sessionId: 's1' },
+    })
+    assert.equal(saved.status, 200)
+
+    const afterSave = await invoke(routes.get(`${SETTINGS_PREFIX}/status`), { method: 'GET' })
+    assert.equal(afterSave.body.push.target.mode, 'session')
     dispose()
   })
 

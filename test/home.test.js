@@ -133,6 +133,23 @@ describe('home service', () => {
     assert.equal(calls.filter(call => call[0] === 'create').length, 1)
   })
 
+  it('re-registers the workspace after the user deletes it', async () => {
+    const dir = join(workdir, 'home-2c')
+    const { ctx, items, calls } = fakeCtx()
+    const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
+    const first = await home.ensure()
+    assert.equal(first.workspaceId, 'ws-1')
+
+    // Simulate deleting the household workspace from the sidebar while another
+    // workspace remains registered.
+    items.splice(0, items.length, { id: 'ws-keep', path: '/tmp/keep', title: '保留' })
+    const second = await home.ensure()
+    assert.notEqual(second.workspaceId, first.workspaceId)
+    assert.equal(second.workspaceId, 'ws-2')
+    assert.equal(calls.filter(call => call[0] === 'create').length, 2)
+    assert.ok(items.some(item => item.id === second.workspaceId && item.path === dir))
+  })
+
   it('applies the configured title to an existing workspace', async () => {
     const dir = join(workdir, 'home-2b')
     const { ctx, items, calls } = fakeCtx()

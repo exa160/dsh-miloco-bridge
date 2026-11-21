@@ -229,12 +229,23 @@ describe('tools', () => {
     const tools = createMilocoTools({ client, readOnly: false, overlay })
     const tool = tools.find(item => item.name === 'miloco_push_target_set')
     await tool.execute({ sessionId: 's9', provider: 'p', model: 'm' }, {})
-    const value = await overlay.current()
+    let value = await overlay.current()
     assert.equal(value.connection.baseUrl, 'http://a')
     assert.equal(value.connection.token, 'conn')
     assert.equal(value.push.token, 'push')
     assert.equal(value.push.target.sessionId, 's9')
     assert.equal(value.push.model.provider, 'p')
+    // A session id without an explicit mode selects the session mode.
+    assert.equal(value.push.target.mode, 'session')
+
+    await tool.execute({ mode: 'archive' }, {})
+    value = await overlay.current()
+    assert.equal(value.push.target.mode, 'archive')
+
+    await assert.rejects(
+      tool.execute({ mode: 'archive', sessionId: 'x' }, {}),
+      /archive 模式会忽略 sessionId/,
+    )
   })
 })
 

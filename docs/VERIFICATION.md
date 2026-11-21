@@ -13,9 +13,9 @@
 ```bash
 cd dsh-miloco-bridge
 npm test
-# 50 tests, 0 fail
+# 124 tests, 0 fail
 npm run selftest
-# 8 项离线自检
+# 9 项离线自检
 python3 -m py_compile adapter/dsh_adapter.py
 ```
 

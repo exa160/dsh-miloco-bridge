@@ -375,6 +375,35 @@ describe('webhook', () => {
     assert.equal(result.reply, 'done')
   })
 
+  it('a second overlapping push does not steal the first waiter', async () => {
+    const { service, fake } = await fixture({ token: 't', existing: ['s1'], target: 's1', waitForResult: true })
+    const first = service.deliver({ message: 'first', timeoutMs: 5_000 })
+    // Let the first delivery register its waiter (it prompts right after).
+    const deadline = Date.now() + 2_000
+    while (!fake.calls.some(call => call[0] === 'prompt' && call[2] === 'first') && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 5))
+    }
+    assert.ok(fake.calls.some(call => call[0] === 'prompt' && call[2] === 'first'))
+
+    // The overlapping push is delivered immediately instead of waiting.
+    const second = await service.deliver({ message: 'second', timeoutMs: 5_000 })
+    assert.equal(second.queued, true)
+    assert.equal(second.status, 'ok')
+    assert.ok(fake.calls.some(call => call[0] === 'prompt' && call[2] === 'second'))
+
+    // The first waiter is still registered, so its own turn settles it.
+    fake.controller.emit({ id: 's1' }, { type: 'turn/start', data: { turn: 3 } })
+    fake.controller.emit({ id: 's1' }, {
+      type: 'assistant/message',
+      data: { message: { content: [{ type: 'text', text: 'first reply' }] } },
+    })
+    fake.controller.emit({ id: 's1' }, { type: 'turn/end', data: { turn: 3, reason: { kind: 'completed' } } })
+
+    const result = await first
+    assert.equal(result.status, 'ok')
+    assert.equal(result.reply, 'first reply')
+  })
+
   it('is idempotent for the same idempotency key', async () => {
     const { service, fake } = await fixture({ token: 't', existing: ['s1'], target: 's1' })
     const first = await service.deliver({ message: 'hello', idempotencyKey: 'same-key' })
