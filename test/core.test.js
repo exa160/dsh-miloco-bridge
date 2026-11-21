@@ -353,6 +353,12 @@ describe('client bundle', () => {
     assert.ok(!source.includes('还没有会话，点「新建会话」开始'))
     assert.ok(!source.includes('dsh-miloco-home'))
     assert.ok(source.includes("'uiWorkspace', 'workspaces', 'uiConversation'"))
+    assert.ok(source.includes('家庭工作区'))
+    assert.ok(source.includes('投递方式'))
+    assert.ok(source.includes('homeDraft'))
+    assert.ok(source.includes('旧目录的工作区注册不会自动删除'))
+    assert.ok(source.includes("value: 'archive'"))
+    assert.ok(source.includes("value: 'session'"))
   })
 })
 
