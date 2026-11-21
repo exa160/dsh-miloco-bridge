@@ -28,6 +28,7 @@ export async function createFakeMiloco(overrides = {}) {
     '/api/admin/upgrade/status': { code: 0, data: { phase: 'idle' } },
     '/api/admin/upgrade/run': { code: 0, data: { started: true } },
     '/api/home-profile/entries': { code: 0, data: { entries: [] } },
+    '/api/events': { code: 0, data: [{ type: 'motion', source: 'cam1', timestamp: 1 }] },
   }
   const routes = { ...defaults, ...overrides }
 
@@ -41,6 +42,11 @@ export async function createFakeMiloco(overrides = {}) {
       return
     }
     const body = typeof payload === 'function' ? payload(req, url) : payload
+    if (body && typeof body === 'object' && Number.isInteger(body.__status)) {
+      res.writeHead(body.__status, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ code: body.__status, message: 'error', data: null }))
+      return
+    }
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify(body))
   })

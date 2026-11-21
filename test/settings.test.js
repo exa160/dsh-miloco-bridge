@@ -58,6 +58,11 @@ async function fixture(options = {}) {
           default: { provider: 'prov', model: 'm1' },
         }
       },
+      async resolveAgent(id) {
+        return id === 'miloco-archive'
+          ? { agent: { session: { header: { id } } } }
+          : { error: Object.assign(new Error('not found'), { code: 'session/not-found' }) }
+      },
     },
     sessions: { list: () => [liveSession, archived] },
     sessionTitle: { get: session => ({ title: session.id === 's1' ? '家庭群' : '普通对话' }) },
@@ -91,19 +96,32 @@ async function fixture(options = {}) {
     },
   }
   const homeDir = join(workdir, 'home-workspace')
+  const registryItems = []
   const home = createHomeService({
     ctx: {
       logger: ctx.logger,
       get(name) {
-        if (name === 'workspaceRegistry') {
-          return {
-            async create(path, title) { return { id: 'ws-home', path, title } },
-          }
+        if (name !== 'workspaceRegistry') return undefined
+        return {
+          async create(path, title) {
+            const found = registryItems.find(item => item.path === path)
+            if (found) return found
+            const workspace = {
+              id: `ws-${registryItems.length + 1}`,
+              path,
+              title,
+              async setTitle(next) { this.title = next },
+            }
+            registryItems.push(workspace)
+            return workspace
+          },
+          list() { return registryItems },
+          async insertBefore() {},
         }
-        return undefined
       },
     },
-    config: { workspace: { dir: homeDir, title: 'Miloco 家庭助手', agentPreset: 'miloco' } },
+    config: { workspace: { dir: homeDir, title: '家庭助手', agentPreset: 'miloco' } },
+    overlay,
     logger: ctx.logger,
   })
   const dispose = registerSettingsApi({
@@ -130,27 +148,90 @@ async function fixture(options = {}) {
 describe('settings API', () => {
   it('registers every route', async () => {
     const { routes } = await fixture()
-    for (const path of ['/status', '/home', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status']) {
+    for (const path of ['/status', '/home', '/home/overview', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status']) {
       assert.ok(routes.has(`${SETTINGS_PREFIX}${path}`), `missing ${path}`)
     }
   })
 
-  it('home route exposes the workspace path, id, title and preset', async () => {
+  it('home route exposes the workspace path, id, title, preset and archive session', async () => {
     const { routes } = await fixture()
     const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { method: 'GET' })
     assert.equal(response.status, 200)
     assert.equal(response.body.ok, true)
     assert.equal(response.body.path, join(workdir, 'home-workspace'))
-    assert.equal(response.body.workspaceId, 'ws-home')
-    assert.equal(response.body.title, 'Miloco 家庭助手')
-    assert.equal(response.body.agentPreset, 'miloco')
+    assert.equal(response.body.workspaceId, 'ws-1')
+    assert.equal(response.body.title, '家庭助手')
+    assert.equal(response.body.dirSource, 'config')
+    assert.equal(response.body.archiveSessionId, 'miloco-archive')
   })
 
   it('home route refuses other methods', async () => {
     const { routes } = await fixture()
-    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { method: 'POST', body: {} })
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { method: 'PUT', body: {} })
     assert.equal(response.status, 405)
     assert.equal(response.body.ok, false)
+  })
+
+  it('home route changes the directory through the overlay', async () => {
+    const { routes, overlay } = await fixture()
+    const next = join(workdir, 'home-changed')
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { dir: next } })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.previousPath, join(workdir, 'home-workspace'))
+    assert.equal(response.body.path, next)
+    assert.equal((await overlay.current()).home.dir, next)
+  })
+
+  it('home route rejects a relative directory', async () => {
+    const { routes } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { dir: 'relative/home' } })
+    assert.equal(response.status, 400)
+  })
+
+  it('overview aggregates devices, events, push log and archive state', async () => {
+    const backend = await createFakeMiloco({
+      '/api/miot/device_list': {
+        code: 0,
+        data: [
+          { did: 'd1', name: '灯', online: true, room_name: '客厅', model: 'm1' },
+          { did: 'd2', name: '插座', online: false, room_name: '客厅', model: 'm2' },
+          { did: 'd3', name: '门锁', online: true, room_name: '', model: 'm3' },
+        ],
+      },
+      '/api/events': { code: 0, data: [{ type: 'motion', source: 'cam1', timestamp: 1 }] },
+    })
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home/overview`), { method: 'GET' })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.ok, true)
+      assert.equal(response.body.home.archive.sessionId, 'miloco-archive')
+      assert.equal(response.body.home.archive.exists, true)
+      assert.equal(response.body.devices.total, 3)
+      assert.equal(response.body.devices.online, 2)
+      assert.equal(response.body.devices.rooms.find(room => room.name === '客厅').total, 2)
+      assert.equal(response.body.devices.rooms.find(room => room.name === '未分组').total, 1)
+      assert.equal(response.body.events.items[0].type, 'motion')
+      assert.deepEqual(response.body.pushes.items, [])
+      assert.equal(response.body.version.current, '2026.10.16')
+      assert.equal(response.body.push.path, '/miloco/webhook')
+    } finally {
+      await backend.close()
+    }
+  })
+
+  it('overview keeps one failing section from blanking the others', async () => {
+    const backend = await createFakeMiloco({ '/api/events': { __status: 500 } })
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home/overview`), { method: 'GET' })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.devices.ok, true)
+      assert.equal(response.body.events.ok, false)
+      assert.equal(response.body.push.path, '/miloco/webhook')
+    } finally {
+      await backend.close()
+    }
   })
 
   it('status reports household overview, conversations and no default-model field', async () => {
@@ -219,6 +300,25 @@ describe('settings API', () => {
     const response = await invoke(routes.get(`${SETTINGS_PREFIX}/target`), {
       body: { provider: 'prov' },
     })
+    assert.equal(response.status, 400)
+  })
+
+  it('target saves the push mode and still preserves the household directory', async () => {
+    const { routes, overlay } = await fixture()
+    await invoke(routes.get(`${SETTINGS_PREFIX}/home`), { body: { dir: join(workdir, 'home-keep') } })
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/target`), {
+      body: { mode: 'session', sessionId: 's1', provider: 'prov', model: 'm1', reasoningEffort: 'low', perceptionLevel: 'all' },
+    })
+    assert.equal(response.status, 200)
+    const value = await overlay.current()
+    assert.equal(value.push.target.mode, 'session')
+    assert.equal(value.push.target.sessionId, 's1')
+    assert.equal(value.home.dir, join(workdir, 'home-keep'))
+  })
+
+  it('target rejects an unknown mode', async () => {
+    const { routes } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/target`), { body: { mode: 'bogus' } })
     assert.equal(response.status, 400)
   })
 
