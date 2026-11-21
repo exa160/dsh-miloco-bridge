@@ -351,6 +351,8 @@ describe('client bundle', () => {
     assert.ok(source.includes('这条通知触发了本轮回复。'))
     assert.ok(source.includes('formatMessageClock'))
     assert.ok(!source.includes('还没有会话，点「新建会话」开始'))
+    assert.ok(!source.includes('dsh-miloco-home'))
+    assert.ok(source.includes("'uiWorkspace', 'workspaces', 'uiConversation'"))
   })
 })
 
