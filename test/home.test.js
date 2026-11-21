@@ -103,7 +103,7 @@ describe('home service', () => {
     const home = createHomeService({ ctx, config: { workspace: { dir } }, logger: ctx.logger })
     const state = await home.ensure()
     assert.equal(state.workspaceId, '')
-    assert.equal(state.title, 'Miloco 家庭助手')
+    assert.equal(state.title, '家庭助手')
     assert.equal(state.agentPreset, 'miloco')
     assert.ok((await stat(dir)).isDirectory())
   })
