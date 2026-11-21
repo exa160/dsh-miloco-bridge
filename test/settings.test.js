@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, describe, it } from 'node:test'
@@ -179,7 +179,20 @@ describe('settings API', () => {
     assert.equal(response.status, 200)
     assert.equal(response.body.previousPath, join(workdir, 'home-workspace'))
     assert.equal(response.body.path, next)
+    assert.equal(response.body.dirSource, 'overlay')
     assert.equal((await overlay.current()).home.dir, next)
+  })
+
+  it('home route fails without touching the overlay when the directory cannot be created', async () => {
+    const { routes, overlay } = await fixture()
+    const blocker = join(workdir, 'blocker')
+    await writeFile(blocker, 'not a directory')
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home`), {
+      body: { dir: join(blocker, 'sub') },
+    })
+    assert.equal(response.status, 500)
+    assert.equal(response.body.ok, false)
+    assert.equal((await overlay.current()).home.dir, '')
   })
 
   it('home route rejects a relative directory', async () => {
