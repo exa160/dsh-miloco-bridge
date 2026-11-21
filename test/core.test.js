@@ -42,23 +42,30 @@ describe('configuration', () => {
   it('normalises the household workspace configuration', () => {
     const defaults = infra.normalizeConfig({})
     assert.equal(defaults.workspace.dir, '')
-    assert.equal(defaults.workspace.title, 'Miloco 家庭助手')
+    assert.equal(defaults.workspace.title, '家庭助手')
     assert.equal(defaults.workspace.agentPreset, 'miloco')
+    assert.equal(defaults.push.target.mode, 'archive')
     // `home` stays the Miloco backend install directory.
     assert.equal(typeof defaults.home, 'string')
 
     const configured = infra.normalizeConfig({
       workspace: { dir: '~/miloco-home', title: '家', agentPreset: 'other' },
+      push: { target: { mode: 'session' } },
     })
     assert.equal(configured.workspace.dir, '~/miloco-home')
     assert.equal(configured.workspace.title, '家')
     assert.equal(configured.workspace.agentPreset, 'other')
+    assert.equal(configured.push.target.mode, 'session')
 
     // The design document's `home` object shape is accepted as well.
     const viaHome = infra.normalizeConfig({ home: { dir: '/tmp/h', title: 'T' } })
     assert.equal(viaHome.workspace.dir, '/tmp/h')
     assert.equal(viaHome.workspace.title, 'T')
     assert.equal(viaHome.workspace.agentPreset, 'miloco')
+
+    // Unknown modes fall back to the archive default.
+    const invalid = infra.normalizeConfig({ push: { target: { mode: 'bogus' } } })
+    assert.equal(invalid.push.target.mode, 'archive')
   })
 
   it('tool half defaults match the preset', () => {

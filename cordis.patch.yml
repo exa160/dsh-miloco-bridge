@@ -32,7 +32,7 @@
         workspace:
           # 空 = $DSH_HOME/plugin-data/dsh-miloco-bridge/home
           dir: ""
-          title: "Miloco 家庭助手"
+          title: "家庭助手"
           agentPreset: "miloco"
         # 留空 = $DSH_HOME/miloco-plugin.json / $DSH_HOME/miloco-plugin.state.json
         overlayFile: ""
@@ -46,9 +46,10 @@
           token: ""
           waitForResult: true
           target:
-            # 空 = 投到「上一次触发 miloco 的会话」。
+            # archive = 投到插件管理的专用归档会话；session = 用下面的 sessionId。
+            mode: "archive"
+            # session 模式下为空 = 投到「上一次触发 miloco 的会话」。
             sessionId: ""
-            # 新建推送会话时使用的 Agent 预设。
             agentPreset: "miloco"
           model:
             # 空 = 跟随目标对话自己选的模型；provider+model 都填才覆盖。
