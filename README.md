@@ -23,6 +23,10 @@
   普通对话看不到 `miloco_*` 工具，也不会被注入 Miloco 技能。
 - **完整能力**：设备、场景、感知、规则、任务、身份、宠物、家庭档案、通知、token 用量。
 - **推送闭环**：Miloco 的感知事件、规则触发、任务到期可以主动推送到 DSH 会话。
+- **家庭概览**：侧栏「Miloco 家庭助手」打开设备/房间、最近事件、推送记录与连接状态；
+  家庭工作区默认置顶，可在设置页修改目录。
+- **推送归档**：推送默认进入专用归档会话 `miloco-archive`，也可在设置页改为任意指定会话；
+  会话内以折叠卡片展示，结构与 DSH 自动化任务触发卡片一致。
 - **感知过滤**：按 `low / medium / high` 事件优先级过滤，低于阈值的感知建议不产生 DSH turn。
 - **可视化配置**：账号/设备/token 概览、推送目标、感知等级、运行模式、连接与卸载都在
   「设置 → 插件 → Miloco」里完成。
@@ -73,6 +77,9 @@ systemctl --user restart dsh-web.service
 4. 在设置页选择运行模式（只读 / 管家）、推送会话、可选模型与感知等级。
 5. 想收 Miloco 主动推送时，确认 Miloco 的 `agent.platform=dsh`，并使用同一枚 Bearer token。
 
+> 原生工作区行的「新建会话」不会自动挂 `miloco` 预设；需要米家工具时请用概览页的
+> 「新建家庭会话」，或选择「Miloco 家庭助手」预设。
+
 ## 权限与风险
 
 - 写入 `$DSH_HOME`（配置、状态、可选部署源码）和 `$MILOCO_HOME`（adapter）。
@@ -102,7 +109,7 @@ systemctl --user restart dsh-web.service
 ## 开发
 
 ```bash
-npm test                 # 78 项测试
+npm test                 # 121 项测试
 npm run selftest         # 离线自检
 npm run verify:readonly  # 真实 Miloco 只读接口
 npm run pack:bundle      # 生成 dist/*.tgz

@@ -168,7 +168,7 @@ adapter 是 duck-typed 的，只要求 `name` / `send_turn` / `read_trace_meta`�
 |---|---|---|
 | bundle 默认 | `node_modules/dsh-miloco-bridge/cordis.patch.yml` | 工具/预设/推送默认值 |
 | profile 覆盖 | `$DSH_HOME/profiles/<profile>/cordis.patch.yml` | 用户级静态覆盖 |
-| 运行时 overlay | `$DSH_HOME/miloco-plugin.json` | 连接、推送令牌、推送目标；立即生效 |
+| 运行时 overlay | `$DSH_HOME/miloco-plugin.json` | 连接、推送令牌、推送目标、家庭目录；立即生效 |
 | 共享状态 | `$DSH_HOME/miloco-plugin.state.json` | 运行模式、最近触发 Miloco 的会话 |
 
 `$DSH_HOME` 默认 `~/.dsh`；设置环境变量后会跟随。
@@ -178,19 +178,29 @@ overlay 示例：
 ```json
 {
   "connection": { "baseUrl": "http://192.0.2.10:1810", "token": "…" },
+  "home": { "dir": "~/miloco-home" },
   "push": {
     "token": "…",
-    "target": { "sessionId": "" },
+    "target": { "mode": "archive", "sessionId": "" },
     "model": { "provider": "", "model": "", "reasoningEffort": "" },
     "perception": { "minLevel": "all" }
   }
 }
 ```
 
-- `target.sessionId` 空 = 上一次触发 Miloco 的会话；
+- `home.dir`：家庭工作区目录，覆盖静态 `workspace.dir`；留空则用
+  `$DSH_HOME/plugin-data/dsh-miloco-bridge/home`。设置页改目录写的就是这一项；
+- `target.mode`：`archive`（默认，所有推送进专用归档会话 `miloco-archive`）或
+  `session`（进下面 `sessionId` 指定的会话）；
+- `target.sessionId` 空 = 上一次触发 Miloco 的会话（仅 `session` 模式）；
 - `model` 空 = 跟随该对话；
 - `perception.minLevel` = `all` / `low` / `medium` / `high`，低于该等级的感知建议不投递；
 - `push.token` 与 Miloco 的 `agent.auth_bearer` 必须一致。
+
+> 归档会话只有一个：前一次 turn 未结束时又到的推送会挤在同一会话里，等待结果可能
+> 报 `timeout`，回复也可能归到另一次推送。推送本身仍会送达；需要按次对齐时改用
+> `session` 模式，或把连发的推送拉开间隔。详见
+> [ARCHITECTURE.md](ARCHITECTURE.md) 的 7.6。
 
 ---
 
