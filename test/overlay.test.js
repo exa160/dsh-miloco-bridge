@@ -29,12 +29,17 @@ describe('overlay schema', () => {
 
   it('a target write preserves the household directory', async () => {
     const overlay = createOverlay({ file: fileFor() })
-    await overlay.write({ home: { dir: '/tmp/house' } })
-    await overlay.write({ push: { token: 't', target: { sessionId: 's1' } } })
+    await overlay.write({
+      home: { dir: '/tmp/house' },
+      push: { token: 't', target: { mode: 'session', sessionId: 's1' }, perception: { minLevel: 'high' } },
+    })
+    await overlay.write({ push: { target: { sessionId: 's2' } } })
     const value = await overlay.current()
     assert.equal(value.home.dir, '/tmp/house')
     assert.equal(value.push.token, 't')
-    assert.equal(value.push.target.sessionId, 's1')
+    assert.equal(value.push.target.mode, 'session')
+    assert.equal(value.push.target.sessionId, 's2')
+    assert.equal(value.push.perception.minLevel, 'high')
   })
 
   it('a home write preserves the push token and mode', async () => {
