@@ -33,14 +33,14 @@ npm 新包可能处于审核期；若 `dsh plugin add dsh-miloco-bridge` 暂时 
 
 ```bash
 npm run pack:bundle
-# dist/dsh-miloco-bridge-0.1.5.tgz
-dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.5.tgz"
+# dist/dsh-miloco-bridge-0.1.6.tgz
+dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.6.tgz"
 ```
 
 或：
 
 ```bash
-./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.5.tgz
+./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.6.tgz
 ```
 
 ### 1.3 手动配置
@@ -289,7 +289,7 @@ systemctl --user restart dsh-web.service
 
 ```bash
 npm run pack:bundle
-dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.5.tgz"
+dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.6.tgz"
 systemctl --user restart dsh-web.service
 ```
 
