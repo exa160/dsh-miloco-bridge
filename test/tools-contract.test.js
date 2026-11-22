@@ -18,10 +18,13 @@ const DEVICES = [
 
 function harness() {
   const calls = []
+  /** Per-call `opts.timeoutMs` overrides, aligned with `calls` by index. */
+  const timeoutOverrides = []
   const client = {
     endpoint: async () => ({ baseUrl: 'http://miloco.test', token: '', home: '/tmp' }),
     async request(method, path, opts = {}) {
       calls.push({ method, path, query: opts.query ?? null, body: opts.body ?? null })
+      timeoutOverrides.push(opts.timeoutMs ?? null)
       if (method === 'GET' && path === '/api/miot/device_list') return DEVICES
       return {}
     },
@@ -39,6 +42,7 @@ function harness() {
   const tools = createMilocoTools({ client, readOnly: false })
   return {
     calls,
+    timeoutOverrides,
     tool: name => {
       const found = tools.find(entry => entry.name === name)
       assert.ok(found, `missing tool ${name}`)
@@ -249,5 +253,17 @@ describe('read and auxiliary write contracts', () => {
     assert.equal(calls[0].path, '/api/identity/pets/pet-1/reference-crops')
     assert.deepEqual(calls[0].files, ['crops', 'crops'])
     assert.deepEqual(calls[0].fields, { mode: 'append' })
+  })
+
+  it('perceive overrides the client timeout; other calls do not', async () => {
+    const { calls, timeoutOverrides, tool } = harness()
+    await tool('miloco_perceive').execute({ sources: ['cam-1'], query: '客厅有人吗' })
+    assert.equal(calls[0].path, '/api/perception/perceive')
+    // Perceive runs multimodal inference (measured 58–78 s) and must not use
+    // the 30 s client default.
+    assert.ok(timeoutOverrides[0] >= 120_000, `expected a long timeout, got ${timeoutOverrides[0]}`)
+
+    await tool('miloco_status').execute({})
+    assert.equal(timeoutOverrides[1], null, 'fast endpoints must keep the client default')
   })
 })
