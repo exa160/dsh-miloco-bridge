@@ -291,6 +291,102 @@ describe('settings API', () => {
     }
   })
 
+  it('overview reports the setup state so the page can tell unconfigured from configured', async () => {
+    const backend = await createFakeMiloco()
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home/overview`), { method: 'GET' })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.setup.ready, true)
+      assert.equal(response.body.setup.connection.reachable, true)
+      assert.equal(response.body.setup.connection.baseUrl, backend.baseUrl)
+      assert.equal(response.body.setup.accountBound, true)
+      assert.equal(response.body.setup.pushTokenSet, true)
+    } finally {
+      await backend.close()
+    }
+  })
+
+  it('overview reports an unconfigured installation when Miloco is unreachable', async () => {
+    const { routes } = await fixture({ milocoBaseUrl: 'http://127.0.0.1:1' })
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home/overview`), { method: 'GET' })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.setup.ready, false)
+    assert.equal(response.body.setup.connection.reachable, false)
+    assert.ok(response.body.setup.error)
+  })
+
+  it('overview reports an unbound account as not ready', async () => {
+    const backend = await createFakeMiloco({
+      '/api/miot/user_info': { code: 0, data: {} },
+      '/api/miot/login_status': { code: 0, data: { is_logged_in: false } },
+    })
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/home/overview`), { method: 'GET' })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.setup.connection.reachable, true)
+      assert.equal(response.body.setup.account.bound, false)
+      assert.equal(response.body.setup.account.loggedIn, false)
+      assert.equal(response.body.setup.ready, false)
+      assert.equal(response.body.setup.milocoUrl, backend.baseUrl)
+    } finally {
+      await backend.close()
+    }
+  })
+
+  it('bind returns the authorization link and its state', async () => {
+    const backend = await createFakeMiloco()
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/miot/bind`), { method: 'POST' })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.ok, true)
+      assert.ok(response.body.oauthUrl.includes('account.xiaomi.com'))
+      assert.equal(response.body.state, 'state-1')
+    } finally {
+      await backend.close()
+    }
+  })
+
+  it('authorize forwards the decoded code and state to Miloco', async () => {
+    const backend = await createFakeMiloco()
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const payload = Buffer.from(JSON.stringify({ code: 'code-1', state: 'state-1' }), 'utf8').toString('base64')
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/miot/authorize`), {
+        method: 'POST',
+        body: { payload },
+      })
+      assert.equal(response.status, 200)
+      assert.equal(response.body.ok, true)
+      assert.equal(response.body.accountChanged, false)
+      assert.equal(response.body.scopePreserved, true)
+      const call = backend.requests.find(item => item.path === '/api/miot/authorize')
+      const sent = JSON.parse(call.body)
+      assert.equal(sent.code, 'code-1')
+      assert.equal(sent.state, 'state-1')
+    } finally {
+      await backend.close()
+    }
+  })
+
+  it('authorize refuses a payload it cannot read', async () => {
+    const backend = await createFakeMiloco()
+    try {
+      const { routes } = await fixture({ milocoBaseUrl: backend.baseUrl })
+      const response = await invoke(routes.get(`${SETTINGS_PREFIX}/miot/authorize`), {
+        method: 'POST',
+        body: { payload: 'not-a-payload' },
+      })
+      assert.equal(response.status, 400)
+      assert.equal(response.body.ok, false)
+      assert.ok(!backend.requests.some(item => item.path === '/api/miot/authorize'))
+    } finally {
+      await backend.close()
+    }
+  })
+
   it('status reports household overview, conversations and no default-model field', async () => {
     const { routes, dispose } = await fixture()
     const response = await invoke(routes.get(`${SETTINGS_PREFIX}/status`), { method: 'GET' })

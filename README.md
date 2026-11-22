@@ -11,11 +11,13 @@
 
 ## 截图
 
-| Agent 预设 | 家庭概览页 | Miloco 配置 |
-|---|---|---|
-| ![Agent 预设](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/agent-presets.png) | ![家庭概览页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-overview.png) | ![Miloco 配置](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-settings.png) |
+| Agent 预设 | 家庭概览页 | 初始化页 | Miloco 配置 |
+|---|---|---|---|
+| ![Agent 预设](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/agent-presets.png) | ![家庭概览页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-overview.png) | ![初始化页](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-setup.png) | ![Miloco 配置](https://raw.githubusercontent.com/exa160/dsh-miloco-bridge/main/docs/images/miloco-settings.png) |
 
 > 截图使用演示数据；真实账号、内网地址与 token 用量已脱敏。
+> 初始化页是「还没连上 Miloco」或「连上了但还没绑定米家账号」时看到的独立引导页，
+> 与配好之后的家庭概览不是同一套版式。
 
 ## 它解决什么问题
 
@@ -25,6 +27,9 @@
 - **推送闭环**：Miloco 的感知事件、规则触发、任务到期可以主动推送到 DSH 会话。
 - **家庭概览**：侧栏「Miloco 家庭助手」打开家庭概览（账号、设备、摄像头、规则/任务、
   感知与 token 用量）、设备/房间、最近事件、推送记录与连接状态。
+- **初始化引导**：没连上 Miloco、或连上了但还没绑定米家账号时，页面是一张独立的
+  居中引导页（三步清单 + 绑定入口），不是配好之后的仪表盘；
+  绑定可以直接跳到 Miloco 自己的页面，也可以在本页粘贴小米回调页的授权内容完成。
 - **家庭工作区**：家庭工作区默认置顶显示，可在配置里修改目录、被误删后 30 秒内自动恢复；
   关闭「启用置顶工作区」后不再注册工作区，其中的会话归到「未分组」。
 - **推送归档**：推送默认进入专用归档会话 `miloco-archive`，也可在配置里改为任意指定会话；
@@ -73,11 +78,15 @@ systemctl --user restart dsh-web.service
 
 ## 快速开始
 
-1. 打开 DSH WebUI → 侧栏「Miloco 家庭助手」→ 右上角「配置」。
+1. 打开 DSH WebUI → 侧栏「Miloco 家庭助手」。
+   - 还没配置时看到的是初始化页：按三步走（部署或连接 Miloco → 绑定米家账号 → 启用推送）。
+   - 点「开始配置」可打开配置弹窗；点「在 Miloco 中绑定 ↗」直接去 Miloco 自己的页面绑定账号。
 2. 没有 Miloco：点「一键部署 Miloco」；已有实例：点「连接已有的 Miloco」。
 3. 新建会话时选择 **「Miloco 家庭助手」**，或用概览页的「新建家庭会话」。
 4. 在配置弹窗里选择运行模式（只读 / 管家）、推送会话、可选模型与感知等级，并可修改家庭工作区目录。
 5. 想收 Miloco 主动推送时，确认 Miloco 的 `agent.platform=dsh`，并使用同一枚 Bearer token。
+
+> 隐私：插件只与本机 Miloco 通信，不上传账号、令牌或家庭数据；绑定建议优先用 Miloco 自己的流程。
 
 ## 权限与风险
 
@@ -86,6 +95,8 @@ systemctl --user restart dsh-web.service
 - 「一键部署」会运行上游 Miloco 安装器，可能安装 Python 依赖并占用磁盘。
 - **默认只读**：写工具不注册；切换到管家模式后才会暴露设备控制、规则/任务创建等能力。
 - 插件不包含遥测，不内置任何账号或 token；推送入口无令牌时 fail closed。
+- 绑定米家账号时，插件只把一次性授权码转交给本机 Miloco：不落日志、不回显浏览器，
+  也不会把账号、令牌或家庭数据上传到任何第三方。
 
 ## 兼容性
 
@@ -108,7 +119,7 @@ systemctl --user restart dsh-web.service
 ## 开发
 
 ```bash
-npm test                 # 121 项测试
+npm test                 # 157 项测试
 npm run selftest         # 离线自检
 npm run verify:readonly  # 真实 Miloco 只读接口
 npm run pack:bundle      # 生成 dist/*.tgz

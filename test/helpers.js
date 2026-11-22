@@ -15,7 +15,9 @@ export async function createFakeMiloco(overrides = {}) {
   const defaults = {
     '/api/admin/status': { code: 0, data: { miot: { ok: true }, perception: { ok: true }, rule_engine: { ok: true }, sqlite: { ok: true } } },
     '/api/miot/user_info': { code: 0, data: { nickname: 'TestUser', uid: 'uid-1' } },
-    '/api/miot/login_status': { code: 0, data: { logged_in: true } },
+    '/api/miot/login_status': { code: 0, data: { is_logged_in: true } },
+    '/api/miot/bind': { code: 0, data: { oauth_url: 'https://account.xiaomi.com/oauth2/authorize?client_id=1&state=state-1' } },
+    '/api/miot/authorize': { code: 0, data: { account_changed: false, scope_preserved: true } },
     '/api/miot/device_list': { code: 0, data: [{ did: 'd1' }, { did: 'd2' }] },
     '/api/miot/camera_list': { code: 0, data: [{ did: 'cam1' }] },
     '/api/rules': { code: 0, data: [{ id: 'r1' }] },
@@ -34,21 +36,30 @@ export async function createFakeMiloco(overrides = {}) {
 
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1')
-    requests.push({ method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams) })
-    const payload = routes[url.pathname]
-    if (payload === undefined) {
-      res.writeHead(404, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ code: 404, message: 'not found' }))
-      return
-    }
-    const body = typeof payload === 'function' ? payload(req, url) : payload
-    if (body && typeof body === 'object' && Number.isInteger(body.__status)) {
-      res.writeHead(body.__status, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ code: body.__status, message: 'error', data: null }))
-      return
-    }
-    res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify(body))
+    const chunks = []
+    req.on('data', chunk => chunks.push(chunk))
+    req.on('end', () => {
+      requests.push({
+        method: req.method,
+        path: url.pathname,
+        query: Object.fromEntries(url.searchParams),
+        body: Buffer.concat(chunks).toString('utf8'),
+      })
+      const payload = routes[url.pathname]
+      if (payload === undefined) {
+        res.writeHead(404, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ code: 404, message: 'not found' }))
+        return
+      }
+      const body = typeof payload === 'function' ? payload(req, url) : payload
+      if (body && typeof body === 'object' && Number.isInteger(body.__status)) {
+        res.writeHead(body.__status, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ code: body.__status, message: 'error', data: null }))
+        return
+      }
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(body))
+    })
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
