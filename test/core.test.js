@@ -16,6 +16,160 @@ import { parseFrontmatter, registerSkills } from '../lib/skills.js'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 let workdir
 
+/**
+ * Parse the YAML subset the bundle patch uses.
+ *
+ * The bundle has no YAML dependency, and the preset block only needs
+ * mappings, lists of `- id:` rows, scalars and nested `config:` lists. The
+ * parser tracks indentation, so a nested row never leaks into its parent.
+ *
+ * @param {string[]} lines - The file lines.
+ * @param {number} start - First line to read.
+ * @param {number} indent - Column the block starts at.
+ * @returns {{value: any, next: number}} The parsed value and the next line.
+ */
+function parseYamlBlock(lines, start, indent) {
+  const isSkippable = line => line.trim() === '' || line.trimStart().startsWith('#')
+  const indentOf = line => line.length - line.trimStart().length
+  const scalar = raw => {
+    const value = raw.trim()
+    if (value === '') return undefined
+    // `!!js` expressions are evaluated by the Loader, not by this parser.
+    if (value.startsWith('!!js')) return value
+    if (value === 'true') return true
+    if (value === 'false') return false
+    if (/^-?\d+$/.test(value)) return Number(value)
+    return value.replace(/^'(.*)'$/, '$1').replace(/^"(.*)"$/, '$1')
+  }
+
+  /** Parse a mapping block at one column. */
+  const mapping = (from, column) => {
+    const result = {}
+    let index = from
+    while (index < lines.length) {
+      const line = lines[index]
+      if (isSkippable(line)) {
+        index += 1
+        continue
+      }
+      const currentIndent = indentOf(line)
+      if (currentIndent < column) break
+      if (currentIndent > column) {
+        index += 1
+        continue
+      }
+      const match = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(line.trim())
+      if (!match) break
+      const [, key, raw] = match
+      index += 1
+      if (raw.trim() !== '') {
+        result[key] = scalar(raw)
+        continue
+      }
+      // An empty value introduces a nested block one level deeper.
+      let probe = index
+      while (probe < lines.length && isSkippable(lines[probe])) probe += 1
+      if (probe >= lines.length || indentOf(lines[probe]) <= column) {
+        result[key] = {}
+        continue
+      }
+      const nestedIndent = indentOf(lines[probe])
+      if (/^\s*-\s+/.test(lines[probe])) {
+        const nested = list(probe, nestedIndent)
+        result[key] = nested.value
+        index = nested.next
+      } else {
+        const nested = mapping(probe, nestedIndent)
+        result[key] = nested.value
+        index = nested.next
+      }
+    }
+    return { value: result, next: index }
+  }
+
+  /** Parse a list of `- key: value` rows at one column. */
+  const list = (from, column) => {
+    const rows = []
+    let index = from
+    while (index < lines.length) {
+      const line = lines[index]
+      if (isSkippable(line)) {
+        index += 1
+        continue
+      }
+      const currentIndent = indentOf(line)
+      if (currentIndent < column) break
+      if (currentIndent > column) {
+        index += 1
+        continue
+      }
+      const itemMatch = /^\s*-\s+(.*)$/.exec(line)
+      if (!itemMatch) break
+      const rest = itemMatch[1]
+      index += 1
+      const row = {}
+      const inline = /^([A-Za-z][\w-]*):\s*(.*)$/.exec(rest)
+      if (inline) {
+        const [, key, raw] = inline
+        if (raw.trim() !== '') {
+          row[key] = scalar(raw)
+        } else {
+          let probe = index
+          while (probe < lines.length && isSkippable(lines[probe])) probe += 1
+          if (probe < lines.length && indentOf(lines[probe]) > column + 2) {
+            const nestedIndent = indentOf(lines[probe])
+            if (/^\s*-\s+/.test(lines[probe])) {
+              const nested = list(probe, nestedIndent)
+              row[key] = nested.value
+              index = nested.next
+            } else {
+              const nested = mapping(probe, nestedIndent)
+              row[key] = nested.value
+              index = nested.next
+            }
+          } else {
+            row[key] = {}
+          }
+        }
+      }
+      // The remaining properties of this row sit two columns deeper.
+      const properties = mapping(index, column + 2)
+      Object.assign(row, properties.value)
+      index = properties.next
+      rows.push(row)
+    }
+    return { value: rows, next: index }
+  }
+
+  const first = lines[start] ?? ''
+  const column = indentOf(first)
+  if (/^\s*-\s+/.test(first)) return list(start, column)
+  return mapping(start, column)
+}
+
+/**
+ * Read the `preset-miloco` plugin list out of `cordis.patch.yml`.
+ *
+ * A structural read (rather than a substring match) is what makes the
+ * compaction regression test meaningful: dropping the group, one of its
+ * children or an `isolate` key changes the parsed tree.
+ *
+ * @returns {Promise<{plugins: Array<Record<string, any>>}>} The preset plugins.
+ */
+async function readPresetPlugins() {
+  const text = await readFile(join(ROOT, 'cordis.patch.yml'), 'utf8')
+  const lines = text.split('\n')
+  // The patch file starts with a comment header; find the first real row.
+  const firstRow = lines.findIndex(line =>
+    line.trim() !== '' && !line.trimStart().startsWith('#'))
+  const document = parseYamlBlock(lines, firstRow, 0).value
+  const inserted = document.flatMap(entry => entry.insert ?? [])
+  const preset = inserted.find(entry => entry.id === 'preset-miloco')
+  assert.ok(preset, 'cordis.patch.yml has no preset-miloco row')
+  assert.ok(Array.isArray(preset.config?.plugins), 'preset-miloco has no plugins list')
+  return { plugins: preset.config.plugins }
+}
+
 before(async () => {
   workdir = await mkdtemp(join(tmpdir(), 'dsh-miloco-bridge-test-'))
 })
@@ -158,6 +312,53 @@ describe('tools', () => {
     assert.ok(!yaml.includes('modelSelectionSettings'))
     assert.ok(yaml.includes('modelSelection: true'))
     assert.ok(yaml.includes('modelDiscovery: true'))
+  })
+
+  it('mounts the compaction group so /compact and auto-compaction exist', async () => {
+    const preset = await readPresetPlugins()
+    const compaction = preset.plugins.find(row => row.id === 'compaction')
+    assert.ok(compaction, 'preset-miloco is missing the compaction group')
+    assert.equal(compaction.name, 'cordis:group')
+    assert.equal(compaction.group, true)
+    // The compaction backend and the pruner each own a realm: the preset mount
+    // audit fails the revision when a preset publishes into the root realm.
+    assert.equal(compaction.isolate.compaction, true)
+    assert.equal(compaction.isolate.toolResultPruner, true)
+    const children = new Map(compaction.config.map(row => [row.id, row]))
+    assert.equal(children.get('compaction-basic').name, '@deepseek-ai/dsh-compaction-basic')
+    assert.equal(children.get('command-compact').name, '@deepseek-ai/dsh-command-compact')
+    const pruner = children.get('tool-result-pruner')
+    assert.equal(pruner.name, '@deepseek-ai/dsh-compaction-tool-result-pruner')
+    assert.equal(pruner.config.thresholdChars, 8192)
+    assert.equal(pruner.config.headChars, 4096)
+    assert.equal(pruner.config.tailChars, 1024)
+  })
+
+  it('loads the household AGENTS.md and the wall clock inside the preset', async () => {
+    const preset = await readPresetPlugins()
+    const names = new Map(preset.plugins.map(row => [row.id, row.name]))
+    // The household workspace keeps a hand-written AGENTS.md with the measured
+    // camera latency and mmWave caveats; without this row it never reaches the
+    // model. Host disables it on purpose: workspace instructions belong to the
+    // session, so the preset has to own the row.
+    assert.equal(names.get('agent-instructions'), '@deepseek-ai/dsh-agent-instructions')
+    // "21:30 remind grandma" style requests need the real clock.
+    assert.equal(names.get('time-context'), '@deepseek-ai/dsh-time-context')
+  })
+
+  it('keeps the coding-agent-only plugins out of the household preset', async () => {
+    const preset = await readPresetPlugins()
+    const names = new Set(preset.plugins.map(row => row.name))
+    // A persona would inject "you are a coding agent" into a household
+    // assistant; the plugin manager and plan mode are coding-session tools.
+    for (const name of [
+      '@deepseek-ai/dsh-persona',
+      '@deepseek-ai/dsh-plan-mode',
+      '@deepseek-ai/dsh-plugin-manager/tools',
+      '@deepseek-ai/dsh-plugin-market/tools',
+    ]) {
+      assert.ok(!names.has(name), `${name} must not be mounted in the miloco preset`)
+    }
   })
 
   it('drops skills registered after the plugin scope was disposed', async () => {

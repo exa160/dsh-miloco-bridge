@@ -249,7 +249,7 @@ dsh-miloco-bridge: push delivery failed ...   # 仅在失败时
 
 ```bash
 npm run pack:bundle
-tar -tzf dist/dsh-miloco-bridge-0.2.0.tgz | head -30
+tar -tzf dist/dsh-miloco-bridge-0.2.1.tgz | head -30
 ```
 
 预期包含：`package/lib/*`、`package/skills/*/SKILL.md`、`package/adapter/dsh_adapter.py`、
@@ -259,7 +259,7 @@ tar -tzf dist/dsh-miloco-bridge-0.2.0.tgz | head -30
 
 ```bash
 DSH_HOME=/tmp/dsh-miloco-bundle-verify \
-  dsh plugin --profile web add "file:$PWD/dist/dsh-miloco-bridge-0.2.0.tgz"
+  dsh plugin --profile web add "file:$PWD/dist/dsh-miloco-bridge-0.2.1.tgz"
 ```
 
 ---

@@ -119,6 +119,21 @@
               stateFile: ""
               cwd: ""
           # 保留标准 DSH Agent 的工具面；子插件只在 miloco 预设内生效。
+          #
+          # agent-instructions：加载工作区里的 AGENTS.md。家庭助手工作区
+          # （~/.dsh/plugin-data/dsh-miloco-bridge/home）里有一份 AGENTS.md，
+          # 记录了摄像头 10–30 秒延迟、毫米波需微动等**实测经验**——没有这个
+          # 插件，这些经验永远不会被模型看到。宿主层刻意禁用了它（工作区指令
+          # 归会话所有），所以预设必须自己声明。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          # time-context：每步注入当前时间与距上一步的间隔。家庭助手要处理
+          # 「21:30 提醒奶奶吃药」「开灯 10 分钟后关」这类与时钟强相关的请求，
+          # 没有它模型只能猜时间。默认 10 分钟注入一次，不显著占用上下文。
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
           - id: tool-bash
             name: '@deepseek-ai/dsh-tool-bash'
             disabled: !!js process.platform === 'win32'
@@ -156,6 +171,33 @@
               searchTimeoutMs: 60000
           - id: present
             name: '@deepseek-ai/dsh-tool-present'
+          # 压缩组：与官方 standard/cordis/ptc 预设逐字一致。
+          #
+          # 预设没有继承机制，每个预设都必须手抄完整插件清单；宿主层刻意
+          # 禁用了 compaction-basic / command-compact / tool-result-pruner
+          # （token meter 是进程级投影表，必须留在宿主作用域），所以压缩
+          # 后端归预设所有。漏抄的后果是静默失效：`/compact` 命令从未注册，
+          # 自动压缩不触发，上下文永远降不下来。
+          #
+          # `isolate` 语义：compaction 与 toolResultPruner 各自进入独立 realm，
+          # 服务实现不会泄漏到根 realm（预设挂载时会审计泄漏）。
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
           - id: delegation
             name: cordis:group
             group: true

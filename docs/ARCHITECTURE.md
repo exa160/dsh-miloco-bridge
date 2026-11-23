@@ -25,6 +25,45 @@ DSH Host
   也让无关对话获得动家里的能力；
 - Skill 是注入上下文的，全局注册会污染其他会话的人设与提示词。
 
+### 预设插件清单必须自己维护（易漏项）
+
+DSH 的 Agent 预设**没有继承机制**：`PresetDefinition` 只有 `id` / `name` /
+`description` / `order` / `plugins` 五个字段，没有 `extends` / `base` / `mixin`。
+预设挂载时把 `plugins` 数组整体交给一棵**独立的** Loader 树
+（`mountPreset()` → `prepareProfileEntries()`），与宿主层的 Loader 树互不影响：
+宿主的 `disabled: true` 不会传染进来，但宿主**也不会**替预设补上任何东西。
+
+官方四个预设（`standard` / `cordis` / `ptc` / `minimal`）因此都是逐字手抄的完整清单。
+
+宿主层**有意**禁用了以下三项（`dsh-web-app/cordis.patch.yml`）：
+
+```yaml
+- id: compaction-basic      # 压缩后端归预设所有
+  disabled: true
+- id: command-compact       # /compact 命令归预设所有
+  disabled: true
+- id: tool-result-pruner    # 工具结果裁剪归预设所有
+  disabled: true
+```
+
+理由是 token meter 的上下文投影表是进程级的，压缩后端必须与消费方同作用域，
+否则 meter 会变成「碰巧挂了哪些预设」的函数。**代价是每个自定义预设必须自己声明
+压缩组**——漏写不会报错，只会**静默失效**：
+
+- `/compact` 命令从未注册 → 用户发的 `/compact` 被当成普通消息塞给模型；
+- `agent/pre-step` 上的自动压缩无人执行 → 上下文永远降不下来；
+- 兜底路径只处理 `CONTEXT_WINDOW_EXCEEDED`，管不了上游的 `max_output_tokens` 截断。
+
+> 历史教训：本仓库的 `miloco` 预设从 2026-10-28 首个 commit 起就没抄压缩组，
+> 直到 2026-11-24 才补上。症状是会话变长后反复「输出被截断」，且每次
+> `usage.outputTokens` 恰好是 16——pi-ai 把有效输出上限钳到了
+> `max(1, contextWindow - input - margin)`，输入过长时落到 1，再被
+> openai-responses 的下限抬回 16。
+
+**升级 DSH 时的检查清单**：对比官方 `standard` 预设的 `plugins` 清单，
+确认压缩组、`agent-instructions`、`time-context` 等公共设施仍在
+`cordis.patch.yml` 的 `preset-miloco` 里。`test/core.test.js` 有对应的回归测试。
+
 ## 2. 文件结构
 
 ```
