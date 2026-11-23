@@ -76,6 +76,7 @@ async function fixture(options = {}) {
   const client = createMilocoClient({ baseUrl: options.milocoBaseUrl || miloco.baseUrl, timeoutMs: 5_000, home: workdir, overlay })
   const written = []
   const upgradeCalls = []
+  const rotatedTokens = []
   const deploy = {
     state: () => ({ running: false, step: 'idle', sourceDir: '/tmp/src', milocoHome: workdir }),
     tail: async () => '',
@@ -84,6 +85,10 @@ async function fixture(options = {}) {
     startUpgrade: async opts => {
       upgradeCalls.push(opts)
       return { started: true, logPath: '/tmp/upgrade.log' }
+    },
+    rotatePushToken: async opts => {
+      rotatedTokens.push(opts.token)
+      return { adapter: true, configured: true, restarted: false }
     },
   }
   const uninstallCalls = []
@@ -148,15 +153,71 @@ async function fixture(options = {}) {
     writeConfig: async values => { written.push(values); return { ok: true, changed: ['baseUrl', 'token'], missing: [] } },
     logger: ctx.logger,
   })
-  return { routes, ctx, client, overlay, state, deploy, upgradeCalls, uninstall, uninstallCalls, written, home, dispose }
+  return { routes, ctx, client, overlay, state, deploy, upgradeCalls, uninstall, uninstallCalls, written, home, dispose, rotatedTokens }
 }
 
 describe('settings API', () => {
   it('registers every route', async () => {
     const { routes } = await fixture()
-    for (const path of ['/status', '/home', '/home/overview', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status']) {
+    for (const path of ['/status', '/home', '/home/overview', '/sessions', '/target', '/mode', '/deploy', '/connect', '/uninstall', '/version', '/upgrade', '/upgrade/status', '/push-token']) {
       assert.ok(routes.has(`${SETTINGS_PREFIX}${path}`), `missing ${path}`)
     }
+  })
+
+  it('push-token route generates an independent token and publishes it', async () => {
+    const { routes, overlay, rotatedTokens } = await fixture()
+    await overlay.write({ connection: { baseUrl: 'http://127.0.0.1:1810', token: 'backend-token' } })
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/push-token`), { method: 'POST', body: {} })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.ok, true)
+    const current = await overlay.current()
+    assert.ok(current.push.token, 'a push token should be written')
+    assert.notEqual(current.push.token, 'backend-token')
+    assert.equal(current.push.token.length >= 32, true)
+    // The token is never echoed back to the browser.
+    assert.equal(JSON.stringify(response.body).includes(current.push.token), false)
+    assert.deepEqual(rotatedTokens, [current.push.token])
+  })
+
+  it('status flags a push token that is shared with the backend token', async () => {
+    const { routes, overlay } = await fixture()
+    await overlay.write({
+      connection: { baseUrl: 'http://127.0.0.1:1810', token: 'shared' },
+      push: { token: 'shared' },
+    })
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/status`), { method: 'GET' })
+    assert.equal(response.status, 200)
+    assert.equal(response.body.push.reusesBackendToken, true)
+    const overview = await invoke(routes.get(`${SETTINGS_PREFIX}/home/overview`), { method: 'GET' })
+    assert.equal(overview.body.setup.pushTokenReusesBackend, true)
+  })
+
+  it('connect keeps the push token independent from the backend token', async () => {
+    const { routes, overlay, rotatedTokens } = await fixture()
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/connect`), {
+      method: 'POST',
+      body: { baseUrl: 'http://127.0.0.1:1810', token: 'backend-token' },
+    })
+    assert.equal(response.status, 200)
+    const current = await overlay.current()
+    assert.notEqual(current.push.token, 'backend-token')
+    assert.deepEqual(rotatedTokens, [current.push.token])
+  })
+
+  it('connect never clears a stored token when the field is left empty', async () => {
+    const { routes, overlay } = await fixture()
+    await overlay.write({
+      connection: { baseUrl: 'http://127.0.0.1:1810', token: 'kept-backend' },
+      push: { token: 'kept-push' },
+    })
+    const response = await invoke(routes.get(`${SETTINGS_PREFIX}/connect`), {
+      method: 'POST',
+      body: { baseUrl: 'http://127.0.0.1:1810', token: '', pushToken: '' },
+    })
+    assert.equal(response.status, 200)
+    const current = await overlay.current()
+    assert.equal(current.connection.token, 'kept-backend')
+    assert.equal(current.push.token, 'kept-push')
   })
 
   it('home route exposes the workspace path, id, title, preset and archive session', async () => {

@@ -90,6 +90,31 @@ describe('Miloco client timeouts', () => {
     )
   })
 
+  it('a rejected credential asks for a new backend token instead of showing the envelope', async () => {
+    const server = createServer((_req, res) => {
+      res.writeHead(401, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ code: 1003, message: 'Invalid or missing service token', data: null }))
+    })
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+    const client = createMilocoClient({ baseUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: 5_000 })
+    try {
+      await assert.rejects(
+        () => client.get('/api/admin/status'),
+        (error) => {
+          assert.ok(error instanceof MilocoError)
+          assert.match(error.message, /后端令牌无效或缺失/)
+          assert.match(error.message, /修改连接/)
+          // The raw backend envelope stays out of the message.
+          assert.doesNotMatch(error.message, /1003/)
+          assert.doesNotMatch(error.message, /Invalid or missing/)
+          return true
+        },
+      )
+    } finally {
+      await new Promise(resolve => server.close(resolve))
+    }
+  })
+
   it('a caller-aborted signal propagates unwrapped', async () => {
     const client = createMilocoClient({ baseUrl: slow.baseUrl, timeoutMs: 60_000 })
     const controller = new AbortController()

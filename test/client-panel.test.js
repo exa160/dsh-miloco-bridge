@@ -22,9 +22,10 @@ const ReactStub = {
 
 /**
  * Load the browser half inside a sandbox and return its exports.
+ * @param {(url: string) => any} [responder] - Fake fetch responder.
  * @returns {Promise<any>} The client exports.
  */
-async function loadClient() {
+async function loadClient(responder) {
   const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
   let exports = null
   const sandbox = {
@@ -40,7 +41,14 @@ async function loadClient() {
       body: {},
       querySelector: () => null,
     },
-    fetch: async () => ({ ok: true, status: 200, text: async () => '{}' }),
+    fetch: async (url) => {
+      const body = responder ? responder(String(url)) : {}
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(body),
+      }
+    },
   }
   sandbox.window = {
     setInterval,
@@ -182,6 +190,7 @@ describe('household panel states', () => {
         connection: { reachable: false, baseUrl: 'http://127.0.0.1:1810' },
         accountBound: false,
         pushTokenSet: true,
+        milocoInstalled: true,
         error: '无法连接 Miloco 后端',
       },
       status: { ok: false },
@@ -197,10 +206,35 @@ describe('household panel states', () => {
     assert.ok(joined.includes('部署或连接 Miloco'))
     assert.ok(joined.includes('绑定米家账号'))
     assert.ok(joined.includes('接收 Miloco 推送'))
-    assert.ok(joined.includes('开始配置'))
+    // The configuration menu is secondary; the page itself offers the actions.
+    assert.ok(joined.includes('更多设置'))
+    assert.ok(!joined.includes('开始配置'))
     assert.ok(joined.includes('重新检测'))
+    // An installed but unreachable Miloco can be connected right here.
+    assert.ok(joined.includes('连接'))
     // The push token is set, so its step is marked as done.
     assert.ok(classes.includes('dsh-miloco-dash-step done'))
+  })
+
+  it('offers the one-click deploy when Miloco is not installed at all', async () => {
+    const client = await loadClient()
+    const overview = {
+      setup: {
+        connection: { reachable: false, baseUrl: 'http://127.0.0.1:1810' },
+        accountBound: false,
+        pushTokenSet: false,
+        milocoInstalled: false,
+        error: '无法连接 Miloco 后端',
+      },
+      status: { ok: false },
+      push: { tokenSet: false },
+    }
+    const page = client.milocoSetupPage(overview, () => {}, () => {})
+    const joined = texts(page).join('|')
+    assert.ok(joined.includes('本机还没有 Miloco'))
+    assert.ok(joined.includes('一键部署 Miloco'))
+    // A missing installation is a fresh start, not a connection error.
+    assert.ok(!joined.includes('无法连接 Miloco 后端'))
   })
 
   it('offers the binding actions and the privacy note when the account is missing', async () => {
@@ -253,5 +287,106 @@ describe('household panel states', () => {
     }
     const page = client.milocoSetupPage(overview, () => {}, () => {})
     assert.ok(!texts(page).join('|').includes('在 Miloco 中绑定 ↗'))
+  })
+
+  it('offers a retry when the last deployment failed', async () => {
+    const client = await loadClient()
+    const overview = {
+      setup: {
+        connection: { reachable: true, baseUrl: 'http://127.0.0.1:1810' },
+        account: { bound: false },
+        accountBound: false,
+        pushTokenSet: true,
+        milocoInstalled: true,
+        milocoUrl: 'http://127.0.0.1:1810',
+        deploy: { running: false, step: 'failed', error: '安装器 prepare 返回 1', log: 'boom' },
+      },
+      status: { ok: true, accountBound: false },
+      push: { tokenSet: true },
+    }
+    const page = client.milocoSetupPage(overview, () => {}, () => {})
+    const joined = texts(page).join('|')
+    assert.ok(joined.includes('部署失败'))
+    assert.ok(joined.includes('重试部署'))
+    // The failed run's log stays visible: it carries the reason.
+    assert.ok(joined.includes('boom'))
+  })
+
+  it('collapses the log once the deployment succeeded', async () => {
+    const client = await loadClient()
+    const overview = {
+      setup: {
+        connection: { reachable: true, baseUrl: 'http://127.0.0.1:1810' },
+        account: { bound: false },
+        accountBound: false,
+        pushTokenSet: true,
+        milocoInstalled: true,
+        milocoUrl: 'http://127.0.0.1:1810',
+        deploy: { running: false, step: 'done', error: '', log: '=== 部署完成 ===' },
+      },
+      status: { ok: true, accountBound: false },
+      push: { tokenSet: true },
+    }
+    const page = client.milocoSetupPage(overview, () => {}, () => {})
+    const joined = texts(page).join('|')
+    assert.ok(!joined.includes('=== 部署完成 ==='))
+  })
+})
+
+describe('deploy card', () => {
+  it('shows the progress while a deployment runs', async () => {
+    const client = await loadClient()
+    const card = client.MilocoDeployCard({
+      deployState: { running: true, step: 'installing', error: '' },
+      deployLog: 'installing…',
+      deployStepLabels: { installing: '安装中' },
+      busy: false,
+    })
+    const joined = texts(expand(card)).join('|')
+    assert.ok(joined.includes('正在部署 Miloco'))
+    assert.ok(joined.includes('安装中'))
+    assert.ok(joined.includes('installing…'))
+  })
+
+  it('offers a retry after a failed deployment', async () => {
+    const client = await loadClient()
+    const card = client.MilocoDeployCard({
+      deployState: { running: false, step: 'failed', error: '安装器 prepare 返回 1' },
+      deployLog: 'boom',
+      deployStepLabels: { failed: '失败' },
+      busy: false,
+    })
+    const joined = texts(expand(card)).join('|')
+    assert.ok(joined.includes('部署失败'))
+    assert.ok(joined.includes('安装器 prepare 返回 1'))
+    assert.ok(joined.includes('重试部署'))
+  })
+
+  it('collapses the log once the deployment succeeded', async () => {
+    const client = await loadClient()
+    const card = client.MilocoDeployCard({
+      deployState: { running: false, step: 'done', error: '' },
+      deployLog: '=== 部署完成 ===',
+      deployStepLabels: { done: '已完成' },
+      busy: false,
+    })
+    const joined = texts(expand(card)).join('|')
+    assert.ok(joined.includes('Miloco 尚未连接'))
+    // The raw log stays out of the page once the deployment succeeded.
+    assert.ok(!joined.includes('=== 部署完成 ==='))
+  })
+
+  it('renders without throwing (no temporal dead zone)', async () => {
+    const client = await loadClient()
+    // Reading a `const` before its declaration throws and blanks the page.
+    assert.doesNotThrow(() => expand(client.MilocoDeployCard({ deployState: {}, deployLog: '' })))
+  })
+})
+
+describe('settings tab rendering', () => {
+  it('renders the settings tab without throwing', async () => {
+    const client = await loadClient(url => (url.endsWith('/status') ? { ok: true } : {}))
+    // A temporal dead zone error here blanks the whole page.
+    assert.doesNotThrow(() => expand(client.MilocoSettingsTab({})))
   })
 })

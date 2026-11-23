@@ -77,9 +77,21 @@
             - "https://gh-proxy.org/"
           # release 包默认从第一个镜像下载；留空 = 自动拼接 releases/download。
           downloadSite: ""
-          # 额外的 uv 索引，不覆盖用户默认索引；PyPI 带 upload-time 元数据，
-          # 部分国内镜像缺少该元数据会触发安装器 exclude-newer 解析失败。
-          uvIndex: "https://pypi.org/simple"
+          # 包索引（uv 用）：留空 = 部署前实测各候选索引的连通速度，选最快的；
+          # 探测失败或镜像都不可用时回退官方 pypi.org。
+          # 官方源在部分网络下只有几百 B/s，装 98 个依赖会失败或极慢。
+          uvDefaultIndex: ""
+          # 候选镜像列表（留空 = 内置列表）。
+          # 必须是支持 PEP 691 JSON 接口的镜像：上游安装器用 exclude-newer
+          # 锁定自己的依赖版本，只有 JSON 索引才带每个文件的 upload-time；
+          # 只提供 HTML 的镜像会让安装直接失败（"no versions of rich"）。
+          # 另一个坑：uv 会并行查询所有索引、取最先返回的那个，所以不要
+          # 用 UV_INDEX 追加官方源——追加反而会拖慢解析。
+          uvIndexUrls:
+            - "https://pypi.tuna.tsinghua.edu.cn/simple"
+            - "https://mirrors.bfsu.edu.cn/pypi/web/simple"
+            - "https://mirrors.sjtug.sjtu.edu.cn/pypi/web/simple"
+            - "https://mirrors.ustc.edu.cn/pypi/simple"
         # 设置页里不展示任何「DSH 默认模型」配置项。模型下拉只有
         # 「跟随该对话」+ 实际模型；不选模型就完全不动会话的模型选择。
     # ------------------------------------------------------------------

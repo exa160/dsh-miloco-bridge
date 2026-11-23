@@ -14,7 +14,8 @@
 #   --profile <name>      DSH profile (default: $DSH_PROFILE or web)
 #   --miloco-home <dir>   Miloco home (default: $MILOCO_HOME or ~/.miloco)
 #   --dsh-origin <url>    DSH Web origin (default: $DSH_ORIGIN or http://127.0.0.1:3080)
-#   --token <token>       Push/agent bearer token (default: Miloco's existing token or random)
+#   --token <token>       Push/agent bearer token (default: keep the current one, else generate)
+#   --reuse-miloco-token  Reuse Miloco's own token as the push token (not recommended)
 #   --bundle <file.tgz>   Install from a packed bundle instead of link:this repo
 #   --no-adapter          Do not install the Miloco agent_platform adapter
 #   --no-connect          Only install the plugin; do not write connection/token
@@ -27,6 +28,7 @@ PROFILE="${DSH_PROFILE:-web}"
 MILOCO_HOME="${MILOCO_HOME:-$HOME/.miloco}"
 DSH_ORIGIN="${DSH_ORIGIN:-http://127.0.0.1:3080}"
 PUSH_TOKEN="${MILOCO_PUSH_TOKEN:-}"
+REUSE_MILOCO_TOKEN=0
 BUNDLE=""
 ADAPTER=1
 CONNECT=1
@@ -38,6 +40,7 @@ while [ $# -gt 0 ]; do
     --miloco-home) MILOCO_HOME="${2:?}"; shift 2 ;;
     --dsh-origin) DSH_ORIGIN="${2:?}"; shift 2 ;;
     --token) PUSH_TOKEN="${2:?}"; shift 2 ;;
+    --reuse-miloco-token) REUSE_MILOCO_TOKEN=1; shift ;;
     --bundle) BUNDLE="${2:?}"; shift 2 ;;
     --no-adapter) ADAPTER=0; shift ;;
     --no-connect) CONNECT=0; shift ;;
@@ -155,11 +158,22 @@ else
   SERVER_URL="$(node_json "$MILOCO_CONFIG" 'value?.server?.url')"
   SERVER_TOKEN="$(node_json "$MILOCO_CONFIG" 'value?.server?.token')"
   AGENT_TOKEN="$(node_json "$MILOCO_CONFIG" 'value?.agent?.auth_bearer')"
+  CURRENT_TOKEN="$(node_json "$OVERLAY" 'value?.push?.token')"
   [ -n "$SERVER_URL" ] || SERVER_URL="http://127.0.0.1:1810"
-  if [ -z "$PUSH_TOKEN" ]; then PUSH_TOKEN="$AGENT_TOKEN"; fi
-  if [ -z "$PUSH_TOKEN" ]; then PUSH_TOKEN="$SERVER_TOKEN"; fi
+  # 推送令牌只用于 Miloco -> DSH；后端令牌用于 DSH -> Miloco，两者不复用。
+  # 优先级：--token > 沿用已有令牌 > 重新生成；只有显式要求才复用 Miloco 的令牌。
+  if [ -z "$PUSH_TOKEN" ] && [ -n "$CURRENT_TOKEN" ]; then
+    PUSH_TOKEN="$CURRENT_TOKEN"
+    say "沿用现有推送令牌"
+  fi
+  if [ -z "$PUSH_TOKEN" ] && [ "$REUSE_MILOCO_TOKEN" = "1" ]; then
+    PUSH_TOKEN="${AGENT_TOKEN:-$SERVER_TOKEN}"
+    [ -n "$PUSH_TOKEN" ] || die "Miloco 没有可复用的令牌"
+    warn "复用了 Miloco 令牌作为推送令牌，两处失守面会叠加"
+  fi
   if [ -z "$PUSH_TOKEN" ]; then
     PUSH_TOKEN="$(openssl rand -base64 36 2>/dev/null | tr -d '\n=+/' | cut -c1-40 || true)"
+    say "已生成新的推送令牌"
   fi
   [ -n "$PUSH_TOKEN" ] || die "无法生成推送令牌，请用 --token 指定"
 

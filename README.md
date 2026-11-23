@@ -59,7 +59,7 @@ dsh plugin --profile web add github:exa160/dsh-miloco-bridge
 
 ```bash
 # 发布包
-dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.1.7.tgz
+dsh plugin --profile web add file:dist/dsh-miloco-bridge-0.2.0.tgz
 
 # 本地开发（link）
 ./install.sh --profile web
@@ -97,11 +97,14 @@ systemctl --user restart dsh-web.service
 - 插件不包含遥测，不内置任何账号或 token；推送入口无令牌时 fail closed。
 - 绑定米家账号时，插件只把一次性授权码转交给本机 Miloco：不落日志、不回显浏览器，
   也不会把账号、令牌或家庭数据上传到任何第三方。
+- **入站推送凭据**：DSH `0.2.3` 起 HTTP 路由默认要求凭据，插件把「推送令牌」注册为
+  宿主凭据（非 owner 身份、仅限推送路由），令牌不入日志、不回显浏览器；宿主不支持时
+  退回插件自带的 Bearer 校验。
 
 ## 兼容性
 
-- DSH：`0.2.2-rc.5` 实测通过；建议 `>= 0.2.2-rc.5`。
-- Node.js：`>= 22`。
+- DSH：`0.2.3-alpha.2` 实测通过；建议 `>= 0.2.2-rc.5`（`0.2.3` 起启用宿主凭据校验）。
+- Node.js：`>= 22`（DSH `0.2.3` 自身要求 `>= 24.22.3`）。
 - Miloco：2.0 HTTP API（`/api/*`，`/api/admin/status`、`/api/perception/*` 等）。
 - 平台：Linux / macOS；Web profile（`dsh --profile web`）。
 

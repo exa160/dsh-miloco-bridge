@@ -33,14 +33,14 @@ npm 新包可能处于审核期；若 `dsh plugin add dsh-miloco-bridge` 暂时 
 
 ```bash
 npm run pack:bundle
-# dist/dsh-miloco-bridge-0.1.7.tgz
-dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.1.7.tgz"
+# dist/dsh-miloco-bridge-0.2.0.tgz
+dsh plugin --profile web add "file:/path/to/dist/dsh-miloco-bridge-0.2.0.tgz"
 ```
 
 或：
 
 ```bash
-./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.1.7.tgz
+./install.sh --profile web --bundle dist/dsh-miloco-bridge-0.2.0.tgz
 ```
 
 ### 1.3 手动配置
@@ -64,6 +64,7 @@ install.sh
 ├── 2. 检测 $MILOCO_HOME/config.json
 │    ├── 已安装
 │    │   ├── 写 $DSH_HOME/miloco-plugin.json（连接 + 推送令牌，0600）
+│    │   ├── 推送令牌：沿用已有值，没有就生成一枚独立的
 │    │   ├── 安装 adapter 到 $MILOCO_HOME/agent_platform/dsh/
 │    │   ├── 写 adapter config.yaml
 │    │   └── 尝试 miloco-cli config set agent.platform dsh
@@ -79,11 +80,21 @@ install.sh
 | `--profile <name>` | DSH profile，默认 `$DSH_PROFILE` 或 `web` |
 | `--miloco-home <dir>` | Miloco home，默认 `$MILOCO_HOME` 或 `~/.miloco` |
 | `--dsh-origin <url>` | DSH Web 地址，写入 adapter 的 `webhook_url` |
-| `--token <token>` | 推送/agent 令牌；不填则复用 Miloco 现有 token 或随机生成 |
+| `--token <token>` | 推送令牌；不填则沿用已有令牌，没有就生成一枚新的 |
+| `--reuse-miloco-token` | 复用 Miloco 自己的令牌作为推送令牌（不推荐） |
 | `--bundle <tgz>` | 从打包文件安装 |
 | `--no-adapter` | 不安装 Miloco 侧 adapter |
 | `--no-connect` | 只装插件，不写连接/令牌 |
 | `--check` | 只做离线检查 |
+
+### 2.1 两枚令牌
+
+| 令牌 | 方向 | 作用 | 位置 |
+|---|---|---|---|
+| 推送令牌 | `Miloco → DSH` | 入站推送鉴权 | `$DSH_HOME/miloco-plugin.json` → `push.token`；Miloco 侧 `agent_platform/dsh/config.yaml` 与 `config.json` 的 `agent.auth_bearer` |
+| 后端令牌 | `DSH → Miloco` | 调用 Miloco API | `$DSH_HOME/miloco-plugin.json` → `connection.token`；Miloco 侧 `config.json` 的 `server.token` |
+
+两者互不复用：一枚泄露会同时打开两个方向。安装脚本默认**新装生成独立的推送令牌**；已存在的令牌不会被覆盖（重装/升级不打断正在工作的推送）。需要换令牌时在设置页点「重新生成」，新值会下发到 Miloco，重启 Miloco 后生效。
 
 ---
 
@@ -289,7 +300,7 @@ systemctl --user restart dsh-web.service
 
 ```bash
 npm run pack:bundle
-dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.1.7.tgz"
+dsh plugin --profile web add "file:dist/dsh-miloco-bridge-0.2.0.tgz"
 systemctl --user restart dsh-web.service
 ```
 

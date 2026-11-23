@@ -43,11 +43,32 @@ async function fixture(options = {}) {
   })
   const flushed = []
   const attachments = []
+  const routes = []
+  const providers = []
+  const peers = []
+  // DSH 0.2.3 keeps the credential registry and the connection service in
+  // separate scopes; the plugin injects the registry and reads both by name.
+  const authentication = {
+    register(provider) {
+      if (options.authThrows) {
+        throw new Error('cannot get property "connection.authentication" without inject')
+      }
+      providers.push(provider)
+      return () => {}
+    },
+  }
+  const connection = {
+    createPeer(options) {
+      const peer = { id: `peer-${peers.length + 1}`, principal: options.principal, disposed: false, async dispose() { this.disposed = true } }
+      peers.push(peer)
+      return peer
+    },
+  }
   const ctx = {
     logger: { info() {}, warn() {} },
     sessionController: fake.controller,
     sandboxPolicy: { workspaceRoot: '/tmp' },
-    webServer: { register() { return () => {} } },
+    webServer: { register(route) { routes.push(route); return () => {} } },
     effect() {},
     on: fake.on,
     get(name) {
@@ -63,6 +84,9 @@ async function fixture(options = {}) {
           }),
         }
       }
+      if (options.connection === false) return undefined
+      if (name === 'connection') return connection
+      if (name === 'connection.authentication') return authentication
       return undefined
     },
   }
@@ -92,7 +116,7 @@ async function fixture(options = {}) {
       clear: async () => {},
     },
   })
-  return { service, fake, overlay, state, ctx, flushed, attachments }
+  return { service, fake, overlay, state, ctx, flushed, attachments, routes, providers, peers }
 }
 
 describe('target semantics', () => {
@@ -295,6 +319,81 @@ describe('target modes', () => {
     service.register()
     await new Promise(resolve => setTimeout(resolve, 50))
     assert.ok(attachments.includes('miloco-archive'))
+  })
+
+  it('registers the inbound webhook as an anonymous route', async () => {
+    // DSH 0.2.3-alpha.1 起 WebServer 路由默认 `auth: 'required'`，
+    // 少了凭据声明，宿主会在插件的 bearer 校验之前就把 Miloco 的推送 401 掉。
+    const { service, routes, providers } = await fixture({ mode: 'archive' })
+    service.register()
+    const webhook = routes.find(route => route.path === '/miloco/webhook')
+    assert.ok(webhook, 'webhook route should be registered')
+    assert.equal(webhook.auth, 'required')
+    assert.equal(providers.length, 1)
+  })
+
+  it('registers the route even when the credential registry is missing', async () => {
+    // A host without the credential service must still get the inbound route;
+    // losing it means Miloco's pushes never arrive at all.
+    const { service, routes } = await fixture({ mode: 'archive', connection: false })
+    service.register()
+    const webhook = routes.find(route => route.path === '/miloco/webhook')
+    assert.ok(webhook, 'webhook route should be registered')
+    assert.equal(webhook.auth, 'anonymous')
+  })
+
+  it('survives a credential registry that refuses the registration', async () => {
+    // DSH 0.2.3 moved `connection` into a scope the plugin must join; a
+    // scope violation throws. The route still has to be registered.
+    const { service, routes } = await fixture({
+      mode: 'archive',
+      connection: true,
+      authThrows: true,
+    })
+    assert.doesNotThrow(() => service.register())
+    const webhook = routes.find(route => route.path === '/miloco/webhook')
+    assert.ok(webhook, 'webhook route should be registered')
+    assert.equal(webhook.auth, 'anonymous')
+  })
+
+  it('falls back to an anonymous route when the host has no connection service', async () => {
+    const { service, routes, providers } = await fixture({ mode: 'archive', connection: false })
+    service.register()
+    const webhook = routes.find(route => route.path === '/miloco/webhook')
+    assert.equal(webhook.auth, 'anonymous')
+    assert.equal(providers.length, 0)
+  })
+
+  it('the credential provider only admits the push route with the push token', async () => {
+    const { service, providers, peers } = await fixture({ mode: 'archive', token: 'push-token' })
+    service.register()
+    // The provider reads a cached token; the first refresh lands on the next tick.
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const [provider] = providers
+    const peer = peers[0]
+    assert.ok(peer)
+    // The push credential must never be an owner credential.
+    assert.notEqual(peer.principal.kind, 'owner')
+
+    const admitted = provider.authenticate({
+      url: 'http://x/miloco/webhook',
+      headers: { authorization: 'Bearer push-token' },
+    })
+    assert.equal(admitted, peer)
+
+    assert.equal(provider.authenticate({
+      url: 'http://x/miloco/webhook',
+      headers: { authorization: 'Bearer wrong' },
+    }), undefined)
+    assert.equal(provider.authenticate({
+      url: 'http://x/miloco/webhook',
+      headers: {},
+    }), undefined)
+    // Another route must not be unlocked by the push token.
+    assert.equal(provider.authenticate({
+      url: 'http://x/api/sessions',
+      headers: { authorization: 'Bearer push-token' },
+    }), undefined)
   })
 
   it('session mode keeps the last-Miloco fallback', async () => {
